@@ -1,0 +1,14 @@
+/.idea
+.DS_Store
+*.exe
+/log
+/data
+/runtime
+__pycache__/
+*.py[cod]
+.pytest_cache
+.vscode
+logs
+templates
+wampy_test
+coolcassette

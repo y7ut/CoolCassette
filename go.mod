@@ -1,0 +1,23 @@
+module github.com/coolcassette/coolcassette
+
+go 1.26.2
+
+require (
+	github.com/bogem/id3v2/v2 v2.1.4
+	github.com/mewkiz/flac v1.0.13
+	github.com/schollz/progressbar/v3 v3.19.0
+	github.com/spf13/cobra v1.10.2
+)
+
+require (
+	github.com/icza/bitio v1.1.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/mewkiz/pkg v0.0.0-20250417130911-3f050ff8c56d // indirect
+	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
+	golang.org/x/text v0.3.8 // indirect
+)
