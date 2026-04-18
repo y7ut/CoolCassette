@@ -35,26 +35,11 @@ const (
 	ProviderOpenRouter Provider = "openrouter"
 )
 
-// Method selects the rendering pipeline.
-type Method string
-
-const (
-	// MethodSticker is the original pipeline:
-	//   cover → AI generates label sticker → composite onto shell template
-	MethodSticker Method = "sticker"
-
-	// MethodShellGuided is the new pipeline:
-	//   cover + shell template → AI directly renders the full 800×480 tape image
-	//   (AI sees the shell layout and can color the body, place art precisely)
-	MethodShellGuided Method = "shell-guided"
-)
-
 // Options controls tape rendering behavior.
 type Options struct {
 	Shell    string // "chf" or "bhf"
 	APIKey   string
 	Provider Provider // "openai" or "openrouter"
-	Method   Method   // "sticker" (default) or "shell-guided"
 	Verbose  bool
 }
 
@@ -62,76 +47,6 @@ type Options struct {
 type RenderResult struct {
 	PNGPath string
 	PKMPath string
-}
-
-// Render generates a complete tape PNG and PKM for an album.
-//
-// If cachedPNGPath is non-empty and the file exists, the API call is skipped
-// and the cached PNG is used directly for PKM encoding.
-// This allows 'preview' output (tape.png in the album dir) to be reused by
-// 'generate' without making a redundant API request.
-func Render(
-	ctx context.Context,
-	coverData []byte,
-	colors []theme.Color,
-	outDir string,
-	shellsDir string,
-	etc1toolPath string,
-	cachedPNGPath string, // path to a pre-generated tape.png, or "" to generate fresh
-	opts Options,
-) (*RenderResult, error) {
-
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return nil, fmt.Errorf("create output dir: %w", err)
-	}
-
-	pngPath := filepath.Join(outDir, "tape.png")
-
-	// Check if a pre-generated PNG is available
-	if cachedPNGPath != "" {
-		if _, err := os.Stat(cachedPNGPath); err == nil {
-			if opts.Verbose {
-				fmt.Printf("  [cache] reusing existing tape PNG: %s\n", cachedPNGPath)
-			}
-			// Copy cached PNG to outDir if it's not already there
-			if cachedPNGPath != pngPath {
-				if err := copyFile(cachedPNGPath, pngPath); err != nil {
-					return nil, fmt.Errorf("copy cached png: %w", err)
-				}
-			}
-			goto encodePKM
-		}
-	}
-
-	// Step 1: Generate sticker via image API
-	{
-		stickerPath := filepath.Join(outDir, "sticker.png")
-		if err := generateSticker(ctx, coverData, colors, stickerPath, opts); err != nil {
-			return nil, fmt.Errorf("generate sticker: %w", err)
-		}
-		defer os.Remove(stickerPath)
-
-		// Step 2: Composite sticker onto shell template → tape.png
-		shellPath := filepath.Join(shellsDir, fmt.Sprintf("shell_%s.png", opts.Shell))
-		if err := compositeTape(stickerPath, shellPath, pngPath); err != nil {
-			return nil, fmt.Errorf("composite tape: %w", err)
-		}
-	}
-
-encodePKM:
-	// Step 3: Compress tape.png → tape.pkm
-	pkmPath := filepath.Join(outDir, "tape.pkm")
-	if err := encodePKM(etc1toolPath, pngPath, pkmPath); err != nil {
-		return nil, fmt.Errorf("encode pkm: %w", err)
-	}
-
-	// Remove intermediate PNG (PKM is the final deliverable)
-	_ = os.Remove(pngPath)
-
-	return &RenderResult{
-		PNGPath: pngPath,
-		PKMPath: pkmPath,
-	}, nil
 }
 
 // RenderShellGuided generates a tape PNG using the "shell-guided" method:
@@ -219,8 +134,9 @@ encodeShellPKM:
 	if err := encodePKM(etc1toolPath, pngPath, pkmPath); err != nil {
 		return nil, fmt.Errorf("encode pkm: %w", err)
 	}
-	_ = os.Remove(pngPath)
 
+	// NOTE: tape.png is intentionally kept so the caller can use it (e.g. reel generation).
+	// The caller is responsible for removing it when no longer needed.
 	return &RenderResult{
 		PNGPath: pngPath,
 		PKMPath: pkmPath,
@@ -309,254 +225,6 @@ func copyFile(src, dst string) error {
 	return out.Sync()
 }
 
-// RenderPreview generates only a tape.png (no PKM) for quick preview.
-func RenderPreview(
-	ctx context.Context,
-	coverData []byte,
-	colors []theme.Color,
-	outPath string,
-	shellsDir string,
-	opts Options,
-) error {
-	tmpDir, err := os.MkdirTemp("", "coolcassette-preview-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	stickerPath := filepath.Join(tmpDir, "sticker.png")
-	if err := generateSticker(ctx, coverData, colors, stickerPath, opts); err != nil {
-		return fmt.Errorf("generate sticker: %w", err)
-	}
-
-	shellPath := filepath.Join(shellsDir, fmt.Sprintf("shell_%s.png", opts.Shell))
-	return compositeTape(stickerPath, shellPath, outPath)
-}
-
-// generateSticker dispatches to the appropriate provider.
-func generateSticker(ctx context.Context, coverData []byte, colors []theme.Color, outPath string, opts Options) error {
-	prompt := buildPrompt(colors)
-	if opts.Verbose {
-		fmt.Printf("[tape] provider: %s\n", opts.Provider)
-		fmt.Printf("[tape] prompt: %s\n", prompt)
-	}
-
-	var imgBytes []byte
-	var err error
-
-	switch opts.Provider {
-	case ProviderOpenRouter:
-		imgBytes, err = generateViaOpenRouter(ctx, coverData, prompt, opts.APIKey)
-	default:
-		imgBytes, err = generateViaOpenAI(ctx, coverData, prompt, opts.APIKey)
-	}
-	if err != nil {
-		return err
-	}
-
-	// Write raw response image to temp file, then resize to exact label dimensions
-	tmpRaw := outPath + ".raw.png"
-	if err := os.WriteFile(tmpRaw, imgBytes, 0644); err != nil {
-		return err
-	}
-	defer os.Remove(tmpRaw)
-
-	cmd := exec.CommandContext(ctx, "magick", tmpRaw,
-		"-resize", fmt.Sprintf("%dx%d!", LabelWidth, LabelHeight),
-		"-depth", "8",
-		outPath,
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("resize sticker: %w\n%s", err, string(out))
-	}
-	return nil
-}
-
-// generateViaOpenRouter calls OpenRouter chat completions with Gemini image generation.
-// Model: google/gemini-3.1-flash-image-preview
-// Uses aspect_ratio 4:1 (wide panoramic) and image input for cover reference.
-func generateViaOpenRouter(ctx context.Context, coverData []byte, prompt, apiKey string) ([]byte, error) {
-	if apiKey == "" {
-		apiKey = os.Getenv("OPENROUTER_API_KEY")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("OpenRouter API key not set (use --api-key or OPENROUTER_API_KEY env)")
-	}
-
-	coverB64 := base64.StdEncoding.EncodeToString(coverData)
-
-	reqBody := map[string]any{
-		"model": "google/gemini-3.1-flash-image-preview",
-		"messages": []map[string]any{
-			{
-				"role": "user",
-				"content": []map[string]any{
-					{
-						"type": "image_url",
-						"image_url": map[string]string{
-							"url": "data:image/jpeg;base64," + coverB64,
-						},
-					},
-					{
-						"type": "text",
-						"text": prompt,
-					},
-				},
-			},
-		},
-		"modalities": []string{"image", "text"},
-	}
-
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		"https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://github.com/coolcassette/coolcassette")
-	req.Header.Set("X-Title", "CoolCassette")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("api request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("openrouter error %d: %s", resp.StatusCode, string(respData))
-	}
-
-	// Parse OpenRouter chat completions response
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Images []struct {
-					ImageURL struct {
-						URL string `json:"url"`
-					} `json:"image_url"`
-				} `json:"images"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(respData, &result); err != nil {
-		return nil, fmt.Errorf("parse response: %w\n%s", err, string(respData))
-	}
-	if len(result.Choices) == 0 || len(result.Choices[0].Message.Images) == 0 {
-		return nil, fmt.Errorf("no image in openrouter response: %s", string(respData))
-	}
-
-	// Image is returned as base64 data URL: "data:image/png;base64,<data>"
-	dataURL := result.Choices[0].Message.Images[0].ImageURL.URL
-	return decodeDataURL(dataURL)
-}
-
-// generateViaOpenAI calls OpenAI gpt-image-1 for image generation.
-func generateViaOpenAI(ctx context.Context, coverData []byte, prompt, apiKey string) ([]byte, error) {
-	if apiKey == "" {
-		apiKey = os.Getenv("OPENAI_API_KEY")
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("OpenAI API key not set (use --api-key or OPENAI_API_KEY env)")
-	}
-
-	imgB64 := base64.StdEncoding.EncodeToString(coverData)
-
-	reqBody := map[string]any{
-		"model":  "gpt-image-1",
-		"prompt": prompt,
-		"input_images": []map[string]any{
-			{
-				"type": "input_image",
-				"image_url": map[string]string{
-					"url": "data:image/jpeg;base64," + imgB64,
-				},
-			},
-		},
-		"size":    "800×328",
-		"quality": "standard",
-		"n":       1,
-	}
-
-	body, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		"https://api.openai.com/v1/images/generations", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("api request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("openai error %d: %s", resp.StatusCode, string(respData))
-	}
-
-	var result struct {
-		Data []struct {
-			B64JSON string `json:"b64_json"`
-			URL     string `json:"url"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(respData, &result); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
-	}
-	if len(result.Data) == 0 {
-		return nil, fmt.Errorf("no image in openai response")
-	}
-
-	if result.Data[0].B64JSON != "" {
-		return base64.StdEncoding.DecodeString(result.Data[0].B64JSON)
-	}
-	return downloadURL(ctx, result.Data[0].URL)
-}
-
-// CompositeTapePublic is the exported version of compositeTape for use by cmd layer.
-func CompositeTapePublic(stickerPath, shellPath, outPath string) error {
-	return compositeTape(stickerPath, shellPath, outPath)
-}
-
-// compositeTape composites a sticker onto the 800×480 shell template.
-func compositeTape(stickerPath, shellPath, outPath string) error {
-	cmd := exec.Command("magick",
-		"-size", fmt.Sprintf("%dx%d", CanvasWidth, CanvasHeight),
-		"xc:#000000",
-		"(", stickerPath, "-resize", fmt.Sprintf("%dx%d!", LabelWidth, LabelHeight), ")",
-		"-geometry", fmt.Sprintf("+%d+%d", LabelX, LabelY),
-		"-composite",
-		shellPath,
-		"-composite",
-		"-depth", "8",
-		outPath,
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("magick composite: %w\n%s", err, string(out))
-	}
-	return nil
-}
-
 // encodePKM compresses a PNG to ETC1 PKM format using etc1tool.
 func encodePKM(etc1toolPath, pngPath, pkmPath string) error {
 	cmd := exec.Command(etc1toolPath, pngPath, "-o", pkmPath)
@@ -616,6 +284,11 @@ Fill this area with a cinematic panoramic expansion of the album cover:
   in the upper-right of the label — elegant, small, not centered
 - No new text beyond what exists in the cover
 - No cassette mechanical parts drawn inside the label area
+
+=== REEL WINDOWS (the two circular openings in the shell) ===
+The reel circles will be cut out and spun as a looping animation, so they must be
+completely shadow-free and evenly lit — no drop shadows, no cast shadows, no
+directional lighting, no dark edges or gradients of any kind inside the circles.
 
 === SHELL BODY (everything outside the label window) ===
 - Recolor the cassette shell body to harmonize with the album cover's dominant
@@ -734,40 +407,22 @@ func generateViaOpenRouterShellGuided(ctx context.Context, coverData, shellData 
 	return decodeDataURL(dataURL)
 }
 
-// buildPrompt constructs the image generation prompt.
-func buildPrompt(_ []theme.Color) string {
-	return strings.TrimSpace(`
-A wide horizontal panoramic image with an aspect ratio of 12:5 (width to height).
-
-This is a cinematic expansion of the provided album cover artwork. Do not simply
-crop or tile the cover — instead, let the world of the cover breathe outward into
-a wider landscape. The same mood, light, and emotional atmosphere should permeate
-the entire canvas, but with more space, more air, more depth.
-
-Style requirements:
-- Seamlessly continue the color palette, texture, and visual language of the cover
-- Painterly quality — evoke the feel of etching, layered watercolor, intaglio print,
-  or aged fine art paper depending on the cover's aesthetic
-- Atmospheric and immersive: open space, subtle gradients, organic texture
-- The overall feeling should be expansive, intimate, and timeless
-
-Composition rules — strictly follow these:
-- If the cover has a portrait, figure, character, or any clear focal subject:
-  place it on the RIGHT side of the canvas (right third), facing or opening toward
-  the left. The left two-thirds should be open, atmospheric background
-- If the cover has no clear subject (abstract, landscape, typographic):
-  keep the visual weight evenly distributed but favor the right side for any
-  concentrated detail
-- The center horizontal band may be slightly softer/more diffuse, as it will
-  be partially obscured by tape reel windows in the final composition
-- If the original cover contains album title text or artist name typography,
-  preserve or reinterpret it in the upper-right corner area of the panoramic
-  image — keep it elegant, unobtrusive, and ensure it is not centered or low
-
-Constraints:
-- No new text or typography beyond what exists in the original cover
-- No cassette tape mechanical parts (no reels, no spools, no tape window)
-- No border, no frame, no vignette
-- Fill the entire canvas edge to edge with no blank margins
-- Pure artwork — not a product label or graphic design template`)
+// CompositeTapePublic composites a sticker/core_tape image onto the 800×480 shell template.
+// Used by the core_tape manual override path.
+func CompositeTapePublic(stickerPath, shellPath, outPath string) error {
+	cmd := exec.Command("magick",
+		"-size", fmt.Sprintf("%dx%d", CanvasWidth, CanvasHeight),
+		"xc:#000000",
+		"(", stickerPath, "-resize", fmt.Sprintf("%dx%d!", LabelWidth, LabelHeight), ")",
+		"-geometry", fmt.Sprintf("+%d+%d", LabelX, LabelY),
+		"-composite",
+		shellPath,
+		"-composite",
+		"-depth", "8",
+		outPath,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("magick composite: %w\n%s", err, string(out))
+	}
+	return nil
 }

@@ -27,12 +27,15 @@ var supportedExts = map[string]bool{
 // Scan walks musicDir recursively and returns one Album per directory
 // that directly contains at least one supported audio file.
 //
+// If force is true, directories that already have cassette.txt are included
+// instead of being skipped.
+//
 // Supports flat and nested layouts, e.g.:
 //
 //	MUSIC/Nujabes - Modal Soul/*.flac         → 1 album
 //	MUSIC/Arcade Fire/Neon Bible/*.mp3        → 1 album
 //	MUSIC/Arcade Fire/The Arcade Fire/*.flac  → 1 album
-func Scan(musicDir string) ([]Album, error) {
+func Scan(musicDir string, force bool) ([]Album, error) {
 	var albums []Album
 
 	err := filepath.WalkDir(musicDir, func(path string, d os.DirEntry, err error) error {
@@ -52,9 +55,11 @@ func Scan(musicDir string) ([]Album, error) {
 			return nil // no audio here, keep walking
 		}
 
-		// Skip if cassette.txt already exists — already processed.
-		if _, err := os.Stat(filepath.Join(path, "cassette.txt")); err == nil {
-			return filepath.SkipDir
+		// Skip if cassette.txt already exists — already processed (unless --force).
+		if !force {
+			if _, err := os.Stat(filepath.Join(path, "cassette.txt")); err == nil {
+				return filepath.SkipDir
+			}
 		}
 
 		// This directory contains audio files — treat as an album.

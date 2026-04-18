@@ -3,18 +3,23 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/coolcassette/coolcassette/internal/audio"
 	"github.com/coolcassette/coolcassette/internal/config"
 	"github.com/coolcassette/coolcassette/internal/deploy"
+	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
+
+// reelAnimDelayMS is the per-frame animation delay for reel atlases (ms).
+const reelAnimDelayMS = 55
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
@@ -49,7 +54,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Scan music directory
 	fmt.Printf("Scanning %s ...\n", musicDir)
-	albums, err := scanner.Scan(musicDir)
+	albums, err := scanner.Scan(musicDir, force)
 	if err != nil {
 		return fmt.Errorf("scan music dir: %w", err)
 	}
@@ -138,6 +143,13 @@ func processAlbum(ctx context.Context, album scanner.Album, workDir, shellsDir, 
 		fmt.Printf("  [shell] %s\n", resolvedShell)
 	}
 
+	// When --force is set, discard any cached tape.png and reel.png in album dir
+	// so everything is regenerated from scratch.
+	if force {
+		_ = os.Remove(filepath.Join(album.Dir, "tape.png"))
+		_ = os.Remove(filepath.Join(album.Dir, "reel.png"))
+	}
+
 	var cachedPNG string
 	if coreTape := tape.FindCoreTape(album.Dir); coreTape != "" {
 		if verbose {
@@ -161,41 +173,115 @@ func processAlbum(ctx context.Context, album scanner.Album, workDir, shellsDir, 
 		Shell:    resolvedShell,
 		APIKey:   apiKey,
 		Provider: tape.Provider(provider),
-		Method:   tape.Method(method),
 		Verbose:  verbose,
 	}
 
-	switch tape.Method(method) {
-	case tape.MethodShellGuided:
-		_, err = tape.RenderShellGuided(ctx, coverData.Data, colors, outDir, shellsDir, etc1toolPath, cachedPNG, opts)
-	default:
-		_, err = tape.Render(ctx, coverData.Data, colors, outDir, shellsDir, etc1toolPath, cachedPNG, opts)
-	}
+	renderResult, err := tape.RenderShellGuided(ctx, coverData.Data, colors, outDir, shellsDir, etc1toolPath, cachedPNG, opts)
 	if err != nil {
 		return fmt.Errorf("render tape: %w", err)
 	}
+	// tape.png is kept alive by renderer; clean it up at the end of this function
+	defer os.Remove(renderResult.PNGPath)
 
-	// 4. Write config.txt
+	// Slug suffixes to avoid name collisions between tape and reel skin directories
+	tapeSlug := album.Slug + "_tape"
+	albumReelSlug := album.Slug + "_reel"
+
+	// 4. Generate reel.png from the tape.png that renderer just produced
+	activeReelName := reel // default: global reel flag (fallback if reel generation fails)
+	{
+		reelCachePath := filepath.Join(album.Dir, "reel.png")
+		reelOutPath := filepath.Join(outDir, "reel.png")
+		defer os.Remove(reelOutPath)
+
+		// Use cached reel.png from album dir (written by 'preview') if present,
+		// unless --force is set in which case we always regenerate.
+		cacheHit := false
+		if !force {
+			if _, err := os.Stat(reelCachePath); err == nil {
+				if verbose {
+					fmt.Printf("  [cache] reusing existing reel.png: %s\n", reelCachePath)
+				}
+				if err := copyFileLocal(reelCachePath, reelOutPath); err != nil {
+					return fmt.Errorf("copy cached reel: %w", err)
+				}
+				cacheHit = true
+			}
+		}
+
+		if !cacheHit {
+			if verbose {
+				fmt.Printf("  [reel] generating from %s\n", renderResult.PNGPath)
+			}
+			if err := reelgen.Generate(renderResult.PNGPath, reelOutPath); err != nil {
+				// Non-fatal: fall back to global reel setting
+				if verbose {
+					fmt.Printf("  [warn] reel generation failed: %v\n", err)
+				}
+				albumReelSlug = "" // mark as failed
+			}
+		}
+
+		// Always clean up the cached reel.png from album dir after use —
+		// it will be regenerated from tape.png on the next run if needed.
+		defer os.Remove(reelCachePath)
+
+		// Build atlas (pkm + atlas.txt + config.txt) and deploy
+		if albumReelSlug != "" {
+			reelAtlasDir := filepath.Join(outDir, "reel_atlas")
+			reelParams := reelgen.DefaultParams()
+			if err := reelgen.BuildAtlas(reelOutPath, reelAtlasDir, etc1toolPath, reelParams, reelAnimDelayMS); err != nil {
+				return fmt.Errorf("build reel atlas: %w", err)
+			}
+			if err := deploy.DeployReel(reelAtlasDir, wampyDir, albumReelSlug); err != nil {
+				return fmt.Errorf("deploy reel: %w", err)
+			}
+			activeReelName = albumReelSlug
+			if verbose {
+				fmt.Printf("  → deployed reel: wampy/skins/cassette/reel/%s/\n", albumReelSlug)
+			}
+		}
+	}
+
+	// 5. Write config.txt (with the album-specific reel name)
 	cfg := config.DefaultConfig(dominant)
-	cfg.Reel = reel
+	cfg.Reel = activeReelName
 	if err := config.WriteTapeConfig(outDir, cfg); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 
-	// 5. Write cassette.txt into the album's music directory
-	if err := config.WriteCassetteTxt(album.Dir, album.Slug, reel); err != nil {
+	// 6. Write cassette.txt into the album's music directory
+	if err := config.WriteCassetteTxt(album.Dir, tapeSlug, activeReelName); err != nil {
 		return fmt.Errorf("write cassette.txt: %w", err)
 	}
 
-	// 6. Deploy to wampy directory
-	if err := deploy.DeployTape(outDir, wampyDir, album.Slug); err != nil {
+	// 7. Deploy tape skin to wampy directory (using _tape suffix)
+	if err := deploy.DeployTape(outDir, wampyDir, tapeSlug); err != nil {
 		return fmt.Errorf("deploy: %w", err)
 	}
 
 	if verbose {
-		fmt.Printf("  → deployed: wampy/skins/cassette/tape/%s/\n", album.Slug)
+		fmt.Printf("  → deployed tape: wampy/skins/cassette/tape/%s/\n", tapeSlug)
 	}
 	return nil
+}
+
+// copyFileLocal is a local copy helper for generate.go
+func copyFileLocal(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
 }
 
 // resolveEtc1Tool finds etc1tool next to the binary or falls back to PATH.

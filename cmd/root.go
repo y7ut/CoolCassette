@@ -23,11 +23,11 @@ var (
 	wampyDir string
 	reel     string
 	dryRun   bool
+	force    bool
 	verbose  bool
 	apiKey   string
 	shell    string
 	provider string
-	method   string
 )
 
 var rootCmd = &cobra.Command{
@@ -52,7 +52,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&shell, "shell", "random", "cassette shell template: chf, bhf, or random")
 	rootCmd.PersistentFlags().StringVar(&provider, "provider", "openrouter", "image generation provider: openrouter or openai")
 	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "API key for image generation (OPENROUTER_API_KEY or OPENAI_API_KEY env)")
-	rootCmd.PersistentFlags().StringVar(&method, "method", "sticker", "rendering method: sticker (original) or shell-guided (pass shell template to AI)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "print plan without writing any files")
+	rootCmd.PersistentFlags().BoolVar(&force, "force", false, "reprocess albums that already have cassette.txt, ignoring all caches")
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "verbose output")
 }

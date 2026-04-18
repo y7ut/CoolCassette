@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/coolcassette/coolcassette/internal/audio"
+	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
@@ -44,7 +45,7 @@ func runPreview(cmd *cobra.Command, args []string) error {
 	}
 
 	// Find first audio file in the given directory
-	albums, err := scanner.Scan(filepath.Dir(albumDir))
+	albums, err := scanner.Scan(filepath.Dir(albumDir), true)
 	if err != nil {
 		return fmt.Errorf("scan: %w", err)
 	}
@@ -92,38 +93,33 @@ func runPreview(cmd *cobra.Command, args []string) error {
 		Shell:    resolvedShell,
 		APIKey:   apiKey,
 		Provider: tape.Provider(provider),
-		Method:   tape.Method(method),
 		Verbose:  verbose,
 	}
 
-	var renderErr error
-	switch tape.Method(method) {
-	case tape.MethodShellGuided:
-		fmt.Println("Method: shell-guided (cover + shell template → AI)")
-		renderErr = tape.RenderPreviewShellGuided(
-			context.Background(),
-			coverData.Data,
-			colors,
-			outPath,
-			shellsDir,
-			opts,
-		)
-	default:
-		fmt.Println("Method: sticker (cover → AI sticker → composite)")
-		renderErr = tape.RenderPreview(
-			context.Background(),
-			coverData.Data,
-			colors,
-			outPath,
-			shellsDir,
-			opts,
-		)
-	}
-	if renderErr != nil {
-		return fmt.Errorf("render preview: %w", renderErr)
+	fmt.Println("Method: shell-guided (cover + shell template → AI)")
+	if err := tape.RenderPreviewShellGuided(
+		context.Background(),
+		coverData.Data,
+		colors,
+		outPath,
+		shellsDir,
+		opts,
+	); err != nil {
+		return fmt.Errorf("render preview: %w", err)
 	}
 
 	fmt.Printf("Preview saved: %s\n", outPath)
+
+	// Generate reel.png alongside tape.png for preview inspection.
+	// generate will consume and delete it automatically.
+	reelOutPath := filepath.Join(albumDir, "reel.png")
+	fmt.Printf("Generating reel animation: %s\n", reelOutPath)
+	if err := reelgen.Generate(outPath, reelOutPath); err != nil {
+		fmt.Fprintf(os.Stderr, "  [warn] reel generation failed: %v\n", err)
+	} else {
+		fmt.Printf("Reel saved: %s\n", reelOutPath)
+	}
+
 	fmt.Printf("\nRun 'generate' to reuse this preview (skips API call):\n")
 	fmt.Printf("  coolcassette generate --music-dir %s --wampy-dir <wampy-path>\n", filepath.Dir(albumDir))
 
