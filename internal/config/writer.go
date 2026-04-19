@@ -96,7 +96,11 @@ func WriteTapeConfig(dir string, cfg TapeConfig) error {
 
 // WriteCassetteTxt writes cassette.txt to the album's music directory.
 // This tells Wampy which tape skin to use for that directory.
+// Returns an error if tapeName is empty to prevent writing invalid entries.
 func WriteCassetteTxt(albumDir, tapeName, reelName string) error {
+	if tapeName == "" {
+		return fmt.Errorf("WriteCassetteTxt: tapeName must not be empty")
+	}
 	content := fmt.Sprintf("tape: %s\nreel: %s\n", tapeName, reelName)
 	return os.WriteFile(filepath.Join(albumDir, "cassette.txt"), []byte(content), 0644)
 }

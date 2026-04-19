@@ -7,10 +7,12 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	id3 "github.com/bogem/id3v2/v2"
+	"github.com/dhowden/tag"
 	"github.com/mewkiz/flac"
 	"github.com/mewkiz/flac/meta"
 )
@@ -21,9 +23,20 @@ type CoverImage struct {
 	Format string // "jpeg" or "png"
 }
 
+// coverImageExts are the supported extensions for cover image files.
+var coverImageExts = []string{".jpg", ".jpeg", ".png", ".webp"}
+
 // ExtractCover extracts the cover image from the given audio file.
+// If a file named "cover.{jpg,jpeg,png,webp}" exists in the same directory,
+// it takes priority over the embedded tag — resized to 400×400 via magick.
 // Supports mp3, flac, wav.
 func ExtractCover(filePath string) (*CoverImage, error) {
+	// Priority: cover image file in album directory
+	dir := filepath.Dir(filePath)
+	if cover, err := findCoverFile(dir); err == nil {
+		return cover, nil
+	}
+
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
 	case ".mp3":
@@ -32,9 +45,91 @@ func ExtractCover(filePath string) (*CoverImage, error) {
 		return extractFLACCover(filePath)
 	case ".wav":
 		return extractWAVCover(filePath)
+	case ".m4a", ".m4b", ".aac", ".mp4":
+		return extractM4ACover(filePath)
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", ext)
 	}
+}
+
+// findCoverFile looks for cover.{jpg,jpeg,png,webp} in dir (case-insensitive),
+// resizes it to 400×400 via magick, and returns the bytes.
+func findCoverFile(dir string) (*CoverImage, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := strings.ToLower(entry.Name())
+		base := strings.TrimSuffix(name, filepath.Ext(name))
+		if base != "cover" {
+			continue
+		}
+		ext := filepath.Ext(name)
+		supported := false
+		for _, e := range coverImageExts {
+			if ext == e {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			continue
+		}
+
+		imgPath := filepath.Join(dir, entry.Name())
+
+		// Resize to 400×400 (fit within, no upscale distortion) via magick,
+		// output as JPEG to a temp file then read back.
+		tmp, err := os.CreateTemp("", "coolcassette-cover-*.jpg")
+		if err != nil {
+			return nil, fmt.Errorf("cover file: create temp: %w", err)
+		}
+		tmp.Close()
+		defer os.Remove(tmp.Name())
+
+		cmd := exec.Command("magick", imgPath,
+			"-resize", "400x400>",
+			"-quality", "85",
+			tmp.Name(),
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("cover file: resize %s: %w\n%s", imgPath, err, string(out))
+		}
+
+		data, err := os.ReadFile(tmp.Name())
+		if err != nil {
+			return nil, fmt.Errorf("cover file: read resized: %w", err)
+		}
+		return &CoverImage{Data: data, Format: "jpeg"}, nil
+	}
+	return nil, fmt.Errorf("no cover file found in %s", dir)
+}
+
+func extractM4ACover(filePath string) (*CoverImage, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open m4a: %w", err)
+	}
+	defer f.Close()
+
+	m, err := tag.ReadFrom(f)
+	if err != nil {
+		return nil, fmt.Errorf("read m4a tag: %w", err)
+	}
+
+	pic := m.Picture()
+	if pic == nil {
+		return nil, fmt.Errorf("no cover found in %s", filePath)
+	}
+
+	return &CoverImage{
+		Data:   pic.Data,
+		Format: mimeToFormat(pic.MIMEType),
+	}, nil
 }
 
 func extractMP3Cover(filePath string) (*CoverImage, error) {

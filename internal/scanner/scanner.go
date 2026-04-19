@@ -22,6 +22,10 @@ var supportedExts = map[string]bool{
 	".mp3":  true,
 	".flac": true,
 	".wav":  true,
+	".m4a":  true,
+	".m4b":  true,
+	".aac":  true,
+	".mp4":  true,
 }
 
 // Scan walks musicDir recursively and returns one Album per directory
@@ -55,11 +59,9 @@ func Scan(musicDir string, force bool) ([]Album, error) {
 			return nil // no audio here, keep walking
 		}
 
-		// Skip if cassette.txt already exists — already processed (unless --force).
-		if !force {
-			if _, err := os.Stat(filepath.Join(path, "cassette.txt")); err == nil {
-				return filepath.SkipDir
-			}
+		// Skip if cassette.txt already exists with valid content — already processed (unless --force).
+		if !force && hasValidCassetteTxt(path) {
+			return filepath.SkipDir
 		}
 
 		// This directory contains audio files — treat as an album.
@@ -81,6 +83,23 @@ func Scan(musicDir string, force bool) ([]Album, error) {
 	})
 
 	return albums, err
+}
+
+// hasValidCassetteTxt returns true if cassette.txt exists in dir and contains
+// a non-empty "tape:" value, indicating the album was successfully processed.
+func hasValidCassetteTxt(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "cassette.txt"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "tape:") {
+			val := strings.TrimSpace(strings.TrimPrefix(line, "tape:"))
+			return val != ""
+		}
+	}
+	return false
 }
 
 // findFirstAudio returns the first supported audio file directly in dir (non-recursive).
