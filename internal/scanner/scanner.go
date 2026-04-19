@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/coolcassette/coolcassette/internal/audio"
 )
 
 // Album represents a music album directory.
@@ -49,10 +51,6 @@ func Scan(musicDir string, force bool) ([]Album, error) {
 		if !d.IsDir() {
 			return nil
 		}
-		// Skip the root itself
-		if path == musicDir {
-			return nil
-		}
 
 		audioFile, err := findFirstAudio(path)
 		if err != nil || audioFile == "" {
@@ -65,10 +63,16 @@ func Scan(musicDir string, force bool) ([]Album, error) {
 		}
 
 		// This directory contains audio files — treat as an album.
-		// Use path relative to musicDir as the display name so nested
-		// paths like "Arcade Fire/Neon Bible" are human-readable.
-		rel, _ := filepath.Rel(musicDir, path)
-		slug := sanitizeSlug(rel)
+		// When path == musicDir (user pointed directly at an album dir),
+		// use the directory base name as the display name.
+		rel, _ := filepath.Rel(filepath.Dir(musicDir), path)
+		if path == musicDir {
+			rel = filepath.Base(musicDir)
+		}
+
+		// Try to derive slug from audio tag metadata (Artist + Album).
+		// Fall back to sanitized directory name if tags are missing.
+		slug := slugFromTags(audioFile, rel)
 
 		albums = append(albums, Album{
 			Dir:            path,
@@ -83,6 +87,21 @@ func Scan(musicDir string, force bool) ([]Album, error) {
 	})
 
 	return albums, err
+}
+
+// slugFromTags reads Artist and Album from the audio file's tags and returns
+// a sanitized slug in the form "artist_album". If either tag is empty, falls
+// back to sanitizing the directory path (dirRel).
+func slugFromTags(audioFile, dirRel string) string {
+	meta := audio.ReadAlbumMeta(audioFile)
+	if meta.Artist != "" && meta.Album != "" {
+		return sanitizeSlug(meta.Artist + "_" + meta.Album)
+	}
+	if meta.Album != "" {
+		return sanitizeSlug(meta.Album)
+	}
+	// Fallback: use directory path
+	return sanitizeSlug(dirRel)
 }
 
 // hasValidCassetteTxt returns true if cassette.txt exists in dir and contains

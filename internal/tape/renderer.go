@@ -304,6 +304,7 @@ directional lighting, no dark edges or gradients of any kind inside the circles.
 === FINAL CONSTRAINTS ===
 - Output exactly 800×480 pixels, filled edge to edge
 - No border, no vignette, no drop shadow, no white margins
+- Text from the cassette tape shell template  should not appear in the final
 - The result should look like a real, physical cassette tape you could hold`)
 }
 
