@@ -133,6 +133,9 @@ button:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px 
     <button id="btn-slow">× 0.5</button>
     <button id="btn-norm">× 1</button>
     <button id="btn-fast">× 2</button>
+    <div class="sep"></div>
+    <span class="speed-label">LABELS</span>
+    <button id="btn-labels">Labels</button>
   </div>
 </div>
 <div class="status">
@@ -161,6 +164,7 @@ const FONT_SIZE   = %d;
 // ── state ─────────────────────────────────────────────────────────────────
 let atlasImg=null, tapeImg=null;
 let frameIdx=0, playing=false, lastTick=0, delay=BASE_DELAY;
+let showLabels=true;
 
 const tapeCanvas = document.getElementById('tape-canvas');
 const tapeCtx    = tapeCanvas.getContext('2d');
@@ -188,6 +192,8 @@ function drawTape(){
   if(!tapeImg) return;
   tapeCtx.clearRect(0,0,800,480);
   tapeCtx.drawImage(tapeImg,0,0,800,480);
+
+  if(!showLabels) return;
 
   tapeCtx.font = FONT_SIZE+'px sans-serif';
   tapeCtx.fillStyle = TEXT_COLOR;
@@ -254,11 +260,28 @@ function updateUI(){
   statSt.textContent=playing?'PLAYING':'STOPPED';
   btnPlay.textContent=playing?'⏸':'▶';
 }
+function toggleLabels(){
+  showLabels=!showLabels;
+  drawTape();
+  const btnLabels=document.getElementById('btn-labels');
+  if(showLabels){
+    btnLabels.style.borderColor='var(--border)';
+    btnLabels.style.color='var(--dim)';
+    btnLabels.style.boxShadow='none';
+    btnLabels.textContent='Hide';
+  }else{
+    btnLabels.style.borderColor='var(--accent)';
+    btnLabels.style.color='var(--accent)';
+    btnLabels.style.boxShadow='0 0 10px rgba(200,245,66,.12)';
+    btnLabels.textContent='Show';
+  }
+}
 function startPlay(){if(playing)return;playing=true;lastTick=performance.now();updateUI();requestAnimationFrame(tick);}
 function stopPlay(){playing=false;updateUI();}
 function togglePlay(){playing?stopPlay():startPlay();}
 
 btnPlay.addEventListener('click',togglePlay);
+document.getElementById('btn-labels').addEventListener('click',toggleLabels);
 document.getElementById('btn-slow').addEventListener('click',()=>{delay=BASE_DELAY*2;updateUI();});
 document.getElementById('btn-norm').addEventListener('click',()=>{delay=BASE_DELAY;updateUI();});
 document.getElementById('btn-fast').addEventListener('click',()=>{delay=Math.round(BASE_DELAY/2);updateUI();});

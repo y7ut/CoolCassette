@@ -1,19 +1,19 @@
 # CoolCassette
 
-AI-powered cassette tape skin generator for the [Wampy](https://github.com/thedannicraft/wampy) music player on Sony NW-series Walkman devices.
+[English](README.md) | [中文](README_CN.md)
+
+AI-powered cassette tape skin generator for the [Wampy](https://github.com/thedannicraft/wampy) music player plugin on Sony NW-series Walkman devices.
 
 Scans your music library, extracts album artwork, generates custom cassette tape visuals using AI, and deploys them directly to your device — including animated reel sprites.
 
 ---
 
-## How it works
+## What it can do
 
-1. Extracts cover art from audio file tags (MP3, FLAC, WAV, M4A) or a `cover.jpg` in the album directory
-2. Sends the cover + a cassette shell template to an AI image model (shell-guided pipeline)
-3. The AI renders a complete 800×480 tape image: panoramic label art + recolored shell body
-4. Crops the reel windows from the tape image, generates a 40-frame rotation atlas (`reel.png`)
-5. Compresses everything to ETC1 PKM format and deploys to the wampy skins directory
-6. Writes `cassette.txt` into each album directory so Wampy picks up the skin automatically
+- **Automatic cover extraction**: Extract album artwork from audio file tags (MP3, FLAC, WAV, M4A) or cover images in the album directory 
+- **tape skins with dynamic reel animation**: Create unique cassette skins based on album covers, including matching tape shells and generate rotation animations
+- **One-click device deployment**: Compress and deploy generated skins and animations directly to the wampy skins directory on your Walkman
+- **Automatic album association**: Generate configuration files in each album directory so Wampy automatically matches the correct tape skin to each album
 
 ---
 
@@ -67,7 +67,7 @@ Scan a music directory and generate + deploy skins for all unprocessed albums.
 
 ```bash
 coolcassette generate \
-  --music-dir ~/Music \
+  --music-dir /Volumes/WALKMAN/MUSIC \
   --wampy-dir /Volumes/WALKMAN/wampy \
   --api-key $OPENROUTER_API_KEY
 ```
@@ -122,7 +122,7 @@ Remove all deployed skins and reset album directories to their original state.
 
 ```bash
 coolcassette uninstall \
-  --music-dir ~/Music \
+  --music-dir /Volumes/WALKMAN/MUSIC \
   --wampy-dir /Volumes/WALKMAN/wampy
 ```
 
@@ -175,36 +175,3 @@ The reel sprite is generated directly from the tape image:
 ## Supported audio formats
 
 MP3, FLAC, WAV, M4A, M4B, AAC, MP4
-
----
-
-## Project structure
-
-```
-cmd/
-  root.go        global flags
-  preview.go     preview command
-  generate.go    generate command
-  share.go       share command
-  uninstall.go   uninstall command
-internal/
-  audio/
-    cover.go     cover art extraction (MP3/FLAC/WAV/M4A + cover file)
-    meta.go      artist/album tag reading for slug generation
-  tape/
-    renderer.go  shell-guided AI rendering pipeline
-  reel/
-    generator.go reel frame generation and atlas building
-  config/
-    writer.go    config.txt and cassette.txt writing
-  deploy/
-    deployer.go  wampy skin deployment
-  scanner/
-    scanner.go   music directory scanning
-  theme/
-    palette.go   dominant color extraction
-  preview/
-    html.go      self-contained HTML preview generation
-assets/
-  templates/     cassette shell PNG templates (chf, bhf)
-```
