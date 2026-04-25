@@ -7,10 +7,13 @@ func RegisterRoutes(router gin.IRouter, svc AlbumService) {
 	healthHandler := NewHealthHandler()
 	albumHandler := NewAlbumHandler(svc)
 	libraryHandler := NewLibraryHandler(svc)
+	fsHandler := NewFSHandler()
 
 	router.GET("/api/health", healthHandler.Get)
 	router.GET("/api/library/status", libraryHandler.Status)
 	router.POST("/api/library/reload", libraryHandler.Reload)
+	router.POST("/api/library/clear-cache", libraryHandler.ClearCache)
+	router.GET("/api/fs/browse", fsHandler.Browse)
 	router.GET("/api/albums", albumHandler.List)
 	router.GET("/api/albums/:id", albumHandler.Get)
 	router.POST("/api/albums/:id/preview", albumHandler.Preview)

@@ -1,7 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	ccserver "github.com/coolcassette/coolcassette/internal/server"
 	"github.com/spf13/cobra"
@@ -21,31 +26,37 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
-	if musicDir == "" {
-		return fmt.Errorf("--music-dir is required")
-	}
-	if wampyDir == "" {
-		return fmt.Errorf("--wampy-dir is required")
-	}
-
 	app, err := ccserver.New(ccserver.Config{
-		MusicDir: musicDir,
-		WampyDir: wampyDir,
-		APIKey:   apiKey,
-		Provider: provider,
-		Shell:    shell,
-		Reel:     reel,
-		Verbose:  verbose,
-		Listen:   serverListen,
+		MusicDirs: musicDirs,
+		WampyDir:  wampyDir,
+		APIKey:    apiKey,
+		Provider:  provider,
+		Shell:     shell,
+		Reel:      reel,
+		Verbose:   verbose,
+		Force:     force,
+		Listen:    serverListen,
 	})
 	if err != nil {
 		return err
 	}
+	defer app.Close()
 
 	engine := app.NewEngine()
+	srv := &http.Server{Addr: serverListen, Handler: engine}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-quit
+		fmt.Println("\nShutting down...")
+		srv.Shutdown(context.Background())
+	}()
+
 	fmt.Printf("CoolCassette server listening on http://%s\n", serverListen)
 	fmt.Printf("Health check: http://%s/api/health\n", serverListen)
-	if err := engine.Run(serverListen); err != nil {
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}
 	return nil

@@ -135,7 +135,7 @@ func (a *App) GetAlbum(ctx context.Context, id string) (any, error) {
 		detail.PreviewReelPNGURL = fmt.Sprintf("/api/albums/%s/preview/reel.png", id)
 	}
 
-	if record.Cassette != nil {
+	if record.Cassette != nil && a.cfg.WampyDir != "" {
 		tapeDir := wampy.TapeDir(a.cfg.WampyDir, record.Cassette.Tape)
 		if cfg, err := wampy.ReadKeyValueFile(filepath.Join(tapeDir, "config.txt")); err == nil {
 			detail.TapeConfig = cfg

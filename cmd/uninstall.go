@@ -24,9 +24,10 @@ func init() {
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {
-	if musicDir == "" {
+	if len(musicDirs) == 0 {
 		return fmt.Errorf("--music-dir is required")
 	}
+	musicDir := musicDirs[0]
 	if wampyDir == "" {
 		return fmt.Errorf("--wampy-dir is required")
 	}

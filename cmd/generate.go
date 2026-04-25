@@ -33,9 +33,10 @@ func init() {
 
 func runGenerate(cmd *cobra.Command, args []string) error {
 	// Validate required flags
-	if musicDir == "" {
+	if len(musicDirs) == 0 {
 		return fmt.Errorf("--music-dir is required")
 	}
+	musicDir := musicDirs[0]
 	if wampyDir == "" {
 		return fmt.Errorf("--wampy-dir is required")
 	}

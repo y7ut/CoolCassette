@@ -34,13 +34,45 @@ func (a *App) CurrentIndexSnapshot() api.IndexSnapshot {
 }
 
 func (a *App) loadInitialIndex() error {
+	a.inheritFromState()
+
+	if !a.cfg.Force {
+		meta, ok := a.loadIndexState()
+		if ok && a.configMatchesState(meta) {
+			dbPath := filepath.Join(a.indexDir, meta.DBFile)
+			db, err := sql.Open("sqlite3", dbPath)
+			if err == nil {
+				if err := db.Ping(); err == nil {
+					return a.swapActiveIndex(db, meta)
+				}
+				_ = db.Close()
+			}
+		}
+	}
 	db, meta, err := a.buildIndexDatabase(func(update scanState) {
 		a.setScanState(update)
 	})
 	if err != nil {
 		return err
 	}
+	if err := a.saveIndexState(meta); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("save index state: %w", err)
+	}
 	return a.swapActiveIndex(db, meta)
+}
+
+func (a *App) inheritFromState() {
+	meta, ok := a.loadIndexState()
+	if !ok {
+		return
+	}
+	if len(a.cfg.MusicDirs) == 0 && len(meta.MusicDirs) > 0 {
+		a.cfg.MusicDirs = meta.MusicDirs
+	}
+	if a.cfg.WampyDir == "" && meta.WampyDir != "" {
+		a.cfg.WampyDir = meta.WampyDir
+	}
 }
 
 func (a *App) buildIndexDatabase(progress func(scanState)) (*sql.DB, indexMetadata, error) {
@@ -49,11 +81,21 @@ func (a *App) buildIndexDatabase(progress func(scanState)) (*sql.DB, indexMetada
 	startedAt := time.Now().UTC()
 	progress(scanState{Active: true, ScanID: scanID, StartedAt: startedAt})
 
-	albums, err := scanner.Scan(a.cfg.MusicDir, true)
-	if err != nil {
-		finished := time.Now().UTC()
-		progress(scanState{Active: false, ScanID: scanID, StartedAt: startedAt, FinishedAt: &finished, Error: err.Error()})
-		return nil, indexMetadata{}, err
+	var albums []scanner.Album
+	seen := make(map[string]bool)
+	for _, dir := range a.cfg.MusicDirs {
+		result, err := scanner.Scan(dir, true)
+		if err != nil {
+			finished := time.Now().UTC()
+			progress(scanState{Active: false, ScanID: scanID, StartedAt: startedAt, FinishedAt: &finished, Error: err.Error()})
+			return nil, indexMetadata{}, err
+		}
+		for _, a := range result {
+			if !seen[a.Dir] {
+				seen[a.Dir] = true
+				albums = append(albums, a)
+			}
+		}
 	}
 	sort.Slice(albums, func(i, j int) bool { return albums[i].Dir < albums[j].Dir })
 
@@ -173,7 +215,9 @@ func (a *App) buildIndexDatabase(progress func(scanState)) (*sql.DB, indexMetada
 		Hash:       contentHash,
 		AlbumCount: len(albums),
 		BuiltAt:    startedAt,
-		DBPath:     dbPath,
+		DBFile:     filepath.Base(dbPath),
+		MusicDirs:  a.cfg.MusicDirs,
+		WampyDir:   a.cfg.WampyDir,
 	}, nil
 }
 
@@ -204,9 +248,10 @@ func (a *App) scanAlbumRecord(album scanner.Album) (albumRecord, error) {
 	createdAt := fileCreatedAt(dirInfo)
 	modifiedAt := dirInfo.ModTime().UTC()
 
+	musicDir := a.findMusicDir(album.Dir)
 	record := albumRecord{
 		AlbumSummary: AlbumSummary{
-			ID:         albumID(a.cfg.MusicDir, album.Dir),
+			ID:         albumID(musicDir, album.Dir),
 			Dir:        album.Dir,
 			Name:       album.Name,
 			Slug:       album.Slug,
@@ -214,7 +259,7 @@ func (a *App) scanAlbumRecord(album scanner.Album) (albumRecord, error) {
 			Album:      albumName,
 			TrackCount: len(files),
 			HasCover:   hasCover,
-			CoverURL:   fmt.Sprintf("/api/albums/%s/assets/cover.png", albumID(a.cfg.MusicDir, album.Dir)),
+			CoverURL:   fmt.Sprintf("/api/albums/%s/assets/cover.png", albumID(musicDir, album.Dir)),
 			CreatedAt:  createdAt,
 			ModifiedAt: modifiedAt,
 		},
@@ -225,7 +270,7 @@ func (a *App) scanAlbumRecord(album scanner.Album) (albumRecord, error) {
 
 	ref, err := wampy.ReadCassette(album.Dir)
 	switch {
-	case err == nil:
+	case err == nil && a.cfg.WampyDir != "":
 		validation := wampy.ValidateCassetteRef(a.cfg.WampyDir, ref)
 		record.Cassette = &ref
 		record.CassetteValid = validation.Built()
@@ -237,14 +282,12 @@ func (a *App) scanAlbumRecord(album scanner.Album) (albumRecord, error) {
 		default:
 			record.Status = StatusNotBuilt
 		}
-	case wampy.IsNotExist(err):
+	default:
 		if fileExists(filepath.Join(album.Dir, "tape.png")) {
 			record.Status = StatusPreviewReady
 		} else {
 			record.Status = StatusNotBuilt
 		}
-	default:
-		return albumRecord{}, err
 	}
 	return record, nil
 }
@@ -295,8 +338,10 @@ func (a *App) swapActiveIndex(db *sql.DB, meta indexMetadata) error {
 	a.activeDB = db
 	a.activeMeta = meta
 	if oldDB != nil {
+		_, _ = oldDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 		_ = oldDB.Close()
 	}
+	a.cleanupOldDBs(meta.DBFile)
 	return nil
 }
 
@@ -587,8 +632,8 @@ func computeIndexHash(ctx context.Context, q rowsQueryer) (string, int, error) {
 	for rows.Next() {
 		var (
 			id, dir, artist, album, status, tape, reel string
-			trackCount, hasCover                       int
-			createdAt, modifiedAt                      int64
+			trackCount, hasCover                        int
+			createdAt, modifiedAt                       int64
 		)
 		if err := rows.Scan(&id, &dir, &artist, &album, &trackCount, &status, &hasCover, &tape, &reel, &createdAt, &modifiedAt); err != nil {
 			return "", 0, err
@@ -602,4 +647,95 @@ func computeIndexHash(ctx context.Context, q rowsQueryer) (string, int, error) {
 		return "", 0, err
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), count, nil
+}
+
+const indexStateFile = "state.json"
+
+func (a *App) loadIndexState() (indexMetadata, bool) {
+	data, err := os.ReadFile(filepath.Join(a.indexDir, indexStateFile))
+	if err != nil {
+		return indexMetadata{}, false
+	}
+	var meta indexMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return indexMetadata{}, false
+	}
+	return meta, true
+}
+
+func (a *App) saveIndexState(meta indexMetadata) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(a.indexDir, indexStateFile), data, 0644)
+}
+
+func (a *App) configMatchesState(meta indexMetadata) bool {
+	if normalizePath(meta.WampyDir) != normalizePath(a.cfg.WampyDir) {
+		return false
+	}
+	return normalizedPathsEqual(meta.MusicDirs, a.cfg.MusicDirs)
+}
+
+func normalizedPathsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	an := make([]string, len(a))
+	bn := make([]string, len(b))
+	for i, p := range a {
+		an[i] = normalizePath(p)
+	}
+	for i, p := range b {
+		bn[i] = normalizePath(p)
+	}
+	sort.Strings(an)
+	sort.Strings(bn)
+	for i := range an {
+		if an[i] != bn[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizePath(p string) string {
+	return strings.TrimRight(filepath.Clean(p), string(filepath.Separator))
+}
+
+func (a *App) findMusicDir(albumDir string) string {
+	for _, dir := range a.cfg.MusicDirs {
+		rel, err := filepath.Rel(dir, albumDir)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return dir
+		}
+	}
+	return ""
+}
+
+func (a *App) cleanupOldDBs(keepFile string) {
+	entries, err := os.ReadDir(a.indexDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if name == keepFile || name == indexStateFile {
+			continue
+		}
+		if strings.HasSuffix(name, ".db") || strings.HasSuffix(name, ".db-wal") || strings.HasSuffix(name, ".db-shm") {
+			base := name
+			if idx := strings.Index(base, ".db"); idx >= 0 {
+				base = base[:idx+3]
+			}
+			if base == keepFile {
+				continue
+			}
+			_ = os.Remove(filepath.Join(a.indexDir, name))
+		}
+	}
 }

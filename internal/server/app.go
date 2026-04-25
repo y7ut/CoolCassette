@@ -13,14 +13,15 @@ import (
 
 // Config defines the runtime configuration for the HTTP server and indexer.
 type Config struct {
-	MusicDir string
-	WampyDir string
-	APIKey   string
-	Provider string
-	Shell    string
-	Reel     string
-	Verbose  bool
-	Listen   string
+	MusicDirs []string
+	WampyDir  string
+	APIKey    string
+	Provider  string
+	Shell     string
+	Reel      string
+	Verbose   bool
+	Listen    string
+	Force     bool
 }
 
 // App owns the HTTP handlers, active index database, and background scan state.
@@ -40,13 +41,6 @@ type App struct {
 
 // New constructs an App, resolves tool paths, and builds the initial SQLite index.
 func New(cfg Config) (*App, error) {
-	if cfg.MusicDir == "" {
-		return nil, fmt.Errorf("music dir is required")
-	}
-	if cfg.WampyDir == "" {
-		return nil, fmt.Errorf("wampy dir is required")
-	}
-
 	etc1toolPath, err := resolveEtc1Tool()
 	if err != nil {
 		return nil, err
@@ -80,6 +74,18 @@ func New(cfg Config) (*App, error) {
 		return nil, err
 	}
 	return app, nil
+}
+
+// Close checkpoints the active SQLite database and closes the connection.
+func (a *App) Close() {
+	a.indexMu.Lock()
+	defer a.indexMu.Unlock()
+	if a.activeDB != nil {
+		fmt.Print("Closing index database\n")
+		_, _ = a.activeDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		_ = a.activeDB.Close()
+		a.activeDB = nil
+	}
 }
 
 // NewEngine creates the Gin engine used by the API server.

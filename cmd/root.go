@@ -19,15 +19,15 @@ func resolveShell() string {
 }
 
 var (
-	musicDir string
-	wampyDir string
-	reel     string
-	dryRun   bool
-	force    bool
-	verbose  bool
-	apiKey   string
-	shell    string
-	provider string
+	musicDirs []string
+	wampyDir  string
+	reel      string
+	dryRun    bool
+	force     bool
+	verbose   bool
+	apiKey    string
+	shell     string
+	provider  string
 )
 
 var rootCmd = &cobra.Command{
@@ -46,7 +46,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&musicDir, "music-dir", "", "path to music root directory (required)")
+	rootCmd.PersistentFlags().StringArrayVar(&musicDirs, "music-dir", nil, "path to music root directory (required, repeatable)")
 	rootCmd.PersistentFlags().StringVar(&wampyDir, "wampy-dir", "", "path to wampy directory on device (required for deploy)")
 	rootCmd.PersistentFlags().StringVar(&reel, "reel", "other", "reel name to use (default: other)")
 	rootCmd.PersistentFlags().StringVar(&shell, "shell", "random", "cassette shell template: chf, bhf, or random")

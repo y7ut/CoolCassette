@@ -35,6 +35,12 @@ type ForceRequest struct {
 	Force bool `json:"force"`
 }
 
+// ReloadRequest is the optional request payload for POST /api/library/reload.
+type ReloadRequest struct {
+	MusicDirs []string `json:"music_dirs"`
+	WampyDir  string   `json:"wampy_dir"`
+}
+
 // AlbumService defines the album- and library-focused operations exposed to HTTP handlers.
 type AlbumService interface {
 	// CurrentIndexSnapshot returns the active index version/hash used for response headers.
@@ -50,11 +56,13 @@ type AlbumService interface {
 	// GetLibraryStatus returns active index metadata and background scan state.
 	GetLibraryStatus(context.Context) (any, error)
 	// ReloadLibrary starts a background full re-scan of the music library.
-	ReloadLibrary(context.Context) (any, error)
+	ReloadLibrary(context.Context, ReloadRequest) (any, error)
 	// AlbumAssetPath resolves an on-disk path for album-local image assets.
 	AlbumAssetPath(context.Context, string, string) (string, error)
 	// PublishedAssetPath resolves an on-disk path for decoded deployed image assets.
 	PublishedAssetPath(context.Context, string, string) (string, error)
 	// AlbumTrackPath resolves an on-disk path for album-local audio files.
 	AlbumTrackPath(context.Context, string, string) (string, error)
+	// ClearCache removes all cache files except the index database.
+	ClearCache(context.Context) (any, error)
 }

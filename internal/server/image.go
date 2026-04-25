@@ -40,6 +40,9 @@ func (a *App) PublishedAssetPath(ctx context.Context, id, name string) (string, 
 	if err != nil {
 		return "", err
 	}
+	if a.cfg.WampyDir == "" {
+		return "", os.ErrNotExist
+	}
 
 	cacheDir := filepath.Join(a.cacheDir, id)
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {

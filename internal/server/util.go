@@ -13,11 +13,17 @@ import (
 )
 
 func albumID(musicDir, albumDir string) string {
-	rel, err := filepath.Rel(musicDir, albumDir)
-	if err != nil {
-		rel = albumDir
+	var key string
+	if musicDir != "" {
+		rel, err := filepath.Rel(musicDir, albumDir)
+		if err != nil {
+			rel = albumDir
+		}
+		key = filepath.Clean(rel)
+	} else {
+		key = filepath.Clean(albumDir)
 	}
-	sum := sha1.Sum([]byte(filepath.Clean(rel)))
+	sum := sha1.Sum([]byte(key))
 	return hex.EncodeToString(sum[:])
 }
 

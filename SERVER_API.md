@@ -11,17 +11,22 @@
 ### 启动命令
 
 ```bash
+# 完整参数
 coolcassette server \
   --music-dir /path/to/MUSIC \
   --wampy-dir /path/to/wampy \
   --listen 127.0.0.1:7350
+
+# 最简启动（无参数，从 state.json 继承上次配置）
+coolcassette server
 ```
 
 ### 说明
 
-- `--music-dir` 必填，指向音乐库根目录。
-- `--wampy-dir` 必填，指向 Wampy 目录。即使本地暂时没有真实 Wampy，也可以先给一个空目录，列表和索引功能仍然可用。
-- 服务启动时会同步扫描整个音乐树，构建 SQLite 索引后才开始监听。
+- `--music-dir` 可选，可重复指定多个目录。未指定时从上次保存的 `state.json` 继承；若首次启动也未指定，则创建空索引，后续通过 `POST /api/library/reload` 配置。
+- `--wampy-dir` 可选。未指定时同样从 `state.json` 继承；若首次也未指定，则 `status` 只有 `not_built` / `preview_ready`。
+- `--force` 强制忽略 `state.json`，全量重建索引。
+- 服务启动时若配置与 `state.json` 匹配，直接复用已有索引（秒启），否则触发全量扫描。
 
 ## 2. 核心概念
 
@@ -175,6 +180,11 @@ X-CoolCassette-Index-Hash: 560caceddfd69d3c7f9775f51cd513bce7fbc89aacc8f55fcd104
   "index_version": "20260424T063342.716925000Z",
   "index_hash": "560caceddfd69d3c7f9775f51cd513bce7fbc89aacc8f55fcd104c3ffc76a06b",
   "album_count": 38,
+  "music_dirs": [
+    "/mnt/music/Download",
+    "/mnt/music/Collection"
+  ],
+  "wampy_dir": "/Volumes/WALKMAN/wampy",
   "scanning": false,
   "scan_id": "20260424T063342.716925000Z",
   "scan_started_at": "2026-04-24T06:33:42.716945Z",
@@ -192,6 +202,10 @@ X-CoolCassette-Index-Hash: 560caceddfd69d3c7f9775f51cd513bce7fbc89aacc8f55fcd104
   当前活动索引内容哈希。
 - `album_count`
   当前索引中可见的专辑总数。
+- `music_dirs`
+  当前监听的音乐目录列表。
+- `wampy_dir`
+  当前配置的 Wampy 目录，未配置时为空字符串。
 - `scanning`
   是否正在执行后台重扫。
 - `scan_id`
@@ -207,7 +221,7 @@ X-CoolCassette-Index-Hash: 560caceddfd69d3c7f9775f51cd513bce7fbc89aacc8f55fcd104
 - `scan_error`
   若扫描失败，这里会返回错误信息。
 
-### 5.2 异步重建索引go
+### 5.2 异步重建索引
 
 #### `POST /api/library/reload`
 
@@ -307,7 +321,7 @@ curl -i \
   "items": [
     {
       "id": "d5f5e1a1f74b6266471d8147d53bef5d0f6088ee",
-      "dir": "/Users/xieyichu/Music/Download/Blur - Blur - 1997   Flac",
+      "dir": "/mnt/music/Download/Blur - Blur - 1997   Flac",
       "name": "Download/Blur - Blur - 1997   Flac",
       "slug": "blur_blur",
       "artist": "Blur",
@@ -401,7 +415,7 @@ curl -i http://127.0.0.1:7350/api/albums/d5f5e1a1f74b6266471d8147d53bef5d0f6088e
 ```json
 {
   "id": "d5f5e1a1f74b6266471d8147d53bef5d0f6088ee",
-  "dir": "/Users/xieyichu/Music/Download/Blur - Blur - 1997   Flac",
+  "dir": "/mnt/music/Download/Blur - Blur - 1997   Flac",
   "name": "Download/Blur - Blur - 1997   Flac",
   "slug": "blur_blur",
   "artist": "Blur",
@@ -416,7 +430,7 @@ curl -i http://127.0.0.1:7350/api/albums/d5f5e1a1f74b6266471d8147d53bef5d0f6088e
   "music_files": [
     {
       "name": "01 - Beetlebum.flac",
-      "path": "/Users/xieyichu/Music/Download/Blur - Blur - 1997   Flac/01 - Beetlebum.flac"
+      "path": "/mnt/music/Download/Blur - Blur - 1997   Flac/01 - Beetlebum.flac"
     }
   ],
   "index_version": "20260424T063342.716925000Z",
@@ -628,3 +642,47 @@ curl -O http://127.0.0.1:7350/api/albums/d5f5e1a1f74b6266471d8147d53bef5d0f6088e
   - `status` 大多为 `not_built` 或 `preview_ready`
 - 图片资源接口当前以 `GET` 为主，若使用 `HEAD`，不保证一定返回与 `GET` 完全一致的行为。
 - 封面资源路径名虽然是 `cover.png`，但真实返回类型可能是 `image/jpeg`，应以响应头为准。
+
+## 12. Changelog
+
+### 2026-04-25: Index 持久化 & 多目录支持 & Wampy 可选
+
+#### 索引持久化（state.json）
+
+- 服务退出时将 index 元数据保存到 `{indexDir}/state.json`，包含 `music_dirs`、`wampy_dir`、`db_file` 等
+- 重启时如果 `music_dirs` 和 `wampy_dir` 与 state.json 一致，直接打开已有 DB，跳过全量扫描（<1秒启动）
+- 配置不匹配或 `--force` 时才触发重建
+- 重建后自动清理旧版 `.db` / `.db-wal` / `.db-shm` 文件
+
+#### `--wampy-dir` 和 `--music-dir` 均可选
+
+- 两者都支持省略，首次启动可完全不传参数，创建空索引
+- 省略时从 `state.json` 继承上次配置（`music_dirs` 和 `wampy_dir` 均继承）
+- 未配置 `wampy_dir` 时专辑状态只有 `not_built` 或 `preview_ready`，`cassette` 字段为空
+- 可通过 `POST /api/library/reload` 后续配置或更新
+
+#### 多 music-dir
+
+- `--music-dir` 改为可重复参数（`--music-dir /A --music-dir /B`），支持同时扫描多个音乐目录
+- 结果按绝对路径去重
+
+#### `POST /api/library/reload` 支持请求体
+
+```
+POST /api/library/reload
+Content-Type: application/json
+
+{
+  "music_dirs": ["/path/to/music1", "/path/to/music2"],
+  "wampy_dir": "/Volumes/WALKMAN/wampy"
+}
+```
+
+- 所有字段可选，省略则保持当前配置
+- 始终触发全量重建（不是智能跳过）
+- 传入时更新运行时配置并重建索引
+
+#### 优雅关闭
+
+- 服务捕获 SIGINT/SIGTERM，执行 WAL checkpoint 后再退出
+- 不再遗留 `.db-wal` / `.db-shm` 文件

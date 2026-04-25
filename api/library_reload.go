@@ -6,9 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Reload handles POST /api/library/reload.
 func (h *LibraryHandler) Reload(c *gin.Context) {
-	value, err := h.service.ReloadLibrary(c.Request.Context())
+	var req ReloadRequest
+	if err := c.ShouldBindJSON(&req); err != nil && err.Error() != "EOF" {
+		writeError(c, err)
+		return
+	}
+	value, err := h.service.ReloadLibrary(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return

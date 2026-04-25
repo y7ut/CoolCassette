@@ -43,9 +43,10 @@ func init() {
 }
 
 func runShare(cmd *cobra.Command, args []string) error {
-	if musicDir == "" {
+	if len(musicDirs) == 0 {
 		return fmt.Errorf("--music-dir is required")
 	}
+	musicDir := musicDirs[0]
 
 	outDir := shareOutputDir
 	if outDir == "" {

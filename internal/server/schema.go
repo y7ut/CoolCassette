@@ -70,6 +70,8 @@ type LibraryStatusResponse struct {
 	IndexVersion   string     `json:"index_version"`
 	IndexHash      string     `json:"index_hash"`
 	AlbumCount     int        `json:"album_count"`
+	MusicDirs      []string   `json:"music_dirs"`
+	WampyDir       string     `json:"wampy_dir"`
 	Scanning       bool       `json:"scanning"`
 	ScanID         string     `json:"scan_id,omitempty"`
 	ScanStartedAt  time.Time  `json:"scan_started_at,omitempty"`
@@ -96,11 +98,13 @@ type albumRecord struct {
 }
 
 type indexMetadata struct {
-	Version    string
-	Hash       string
-	AlbumCount int
-	BuiltAt    time.Time
-	DBPath     string
+	Version    string    `json:"version"`
+	Hash       string    `json:"hash"`
+	AlbumCount int       `json:"album_count"`
+	BuiltAt    time.Time `json:"built_at"`
+	DBFile     string    `json:"db_file"`
+	MusicDirs  []string  `json:"music_dirs"`
+	WampyDir   string    `json:"wampy_dir"`
 }
 
 type scanState struct {
