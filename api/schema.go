@@ -55,4 +55,6 @@ type AlbumService interface {
 	AlbumAssetPath(context.Context, string, string) (string, error)
 	// PublishedAssetPath resolves an on-disk path for decoded deployed image assets.
 	PublishedAssetPath(context.Context, string, string) (string, error)
+	// AlbumTrackPath resolves an on-disk path for album-local audio files.
+	AlbumTrackPath(context.Context, string, string) (string, error)
 }

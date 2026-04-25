@@ -33,8 +33,12 @@ type AlbumSummary struct {
 
 // MusicFile describes one music file inside an album directory.
 type MusicFile struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Artist      string `json:"artist,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Album       string `json:"album,omitempty"`
+	TrackNumber int    `json:"track_number,omitempty"`
 }
 
 // AlbumDetail is the lazily loaded detail payload for a single album.

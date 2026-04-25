@@ -165,16 +165,36 @@ func listMusicFiles(dir string) ([]MusicFile, error) {
 		if entry.IsDir() {
 			continue
 		}
+		if entry.Name()[0] == '.' {
+			continue
+		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
 		switch ext {
 		case ".mp3", ".flac", ".wav", ".m4a", ".m4b", ".aac", ".mp4":
+			fullPath := filepath.Join(dir, entry.Name())
+			tm := audio.ReadTrackMeta(fullPath)
 			files = append(files, MusicFile{
-				Name: entry.Name(),
-				Path: filepath.Join(dir, entry.Name()),
+				Name:        entry.Name(),
+				Path:        fullPath,
+				Artist:      tm.Artist,
+				Title:       tm.Title,
+				Album:       tm.Album,
+				TrackNumber: tm.TrackNumber,
 			})
 		}
 	}
-	sort.Slice(files, func(i, j int) bool { return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name) })
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].TrackNumber != files[j].TrackNumber {
+			if files[j].TrackNumber == 0 {
+				return true
+			}
+			if files[i].TrackNumber == 0 {
+				return false
+			}
+			return files[i].TrackNumber < files[j].TrackNumber
+		}
+		return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name)
+	})
 	return files, nil
 }
 

@@ -17,4 +17,5 @@ func RegisterRoutes(router gin.IRouter, svc AlbumService) {
 	router.POST("/api/albums/:id/publish", albumHandler.Publish)
 	router.GET("/api/albums/:id/assets/:name", albumHandler.Asset)
 	router.GET("/api/albums/:id/published/:name", albumHandler.PublishedAsset)
+	router.GET("/api/albums/:id/tracks/:name", albumHandler.Track)
 }

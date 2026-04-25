@@ -50,7 +50,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&wampyDir, "wampy-dir", "", "path to wampy directory on device (required for deploy)")
 	rootCmd.PersistentFlags().StringVar(&reel, "reel", "other", "reel name to use (default: other)")
 	rootCmd.PersistentFlags().StringVar(&shell, "shell", "random", "cassette shell template: chf, bhf, or random")
-	rootCmd.PersistentFlags().StringVar(&provider, "provider", "openrouter", "image generation provider: openrouter or openai")
+	rootCmd.PersistentFlags().StringVar(&provider, "provider", "openrouter", "image generation provider: openrouter, openai, or google")
 	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "API key for image generation (OPENROUTER_API_KEY or OPENAI_API_KEY env)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "print plan without writing any files")
 	rootCmd.PersistentFlags().BoolVar(&force, "force", false, "reprocess albums that already have cassette.txt, ignoring all caches")

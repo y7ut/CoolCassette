@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/coolcassette/coolcassette/internal/theme"
+	"google.golang.org/genai"
 )
 
 const (
@@ -31,8 +32,9 @@ const (
 type Provider string
 
 const (
-	ProviderOpenAI     Provider = "openai"
+	// ProviderOpenAI     Provider = "openai"
 	ProviderOpenRouter Provider = "openrouter"
+	ProviderGoogle     Provider = "google"
 )
 
 // Options controls tape rendering behavior.
@@ -103,8 +105,8 @@ func RenderShellGuided(
 
 		var imgBytes []byte
 		switch opts.Provider {
-		case ProviderOpenRouter:
-			imgBytes, err = generateViaOpenRouterShellGuided(ctx, coverData, shellData, prompt, opts.APIKey)
+		case ProviderGoogle:
+			imgBytes, err = generateViaGoogleGenAI(ctx, coverData, shellData, prompt, opts.APIKey)
 		default:
 			imgBytes, err = generateViaOpenRouterShellGuided(ctx, coverData, shellData, prompt, opts.APIKey)
 		}
@@ -163,7 +165,13 @@ func RenderPreviewShellGuided(
 		fmt.Printf("[tape/shell-guided] prompt: %s\n", prompt)
 	}
 
-	imgBytes, err := generateViaOpenRouterShellGuided(ctx, coverData, shellData, prompt, opts.APIKey)
+	var imgBytes []byte
+	switch opts.Provider {
+	case ProviderGoogle:
+		imgBytes, err = generateViaGoogleGenAI(ctx, coverData, shellData, prompt, opts.APIKey)
+	default:
+		imgBytes, err = generateViaOpenRouterShellGuided(ctx, coverData, shellData, prompt, opts.APIKey)
+	}
 	if err != nil {
 		return fmt.Errorf("generate shell-guided image: %w", err)
 	}
@@ -306,6 +314,48 @@ directional lighting, no dark edges or gradients of any kind inside the circles.
 - No border, no vignette, no drop shadow, no white margins
 - Text from the cassette tape shell template  should not appear in the final
 - The result should look like a real, physical cassette tape you could hold`)
+}
+
+// generateViaGoogleGenAI uses the official Google GenAI SDK to generate a tape image.
+func generateViaGoogleGenAI(ctx context.Context, coverData, shellData []byte, prompt, apiKey string) ([]byte, error) {
+	if apiKey == "" {
+		apiKey = os.Getenv("GOOGLE_API_KEY")
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("Google API key not set (use --api-key or GOOGLE_API_KEY env)")
+	}
+
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: apiKey})
+	if err != nil {
+		return nil, fmt.Errorf("genai client: %w", err)
+	}
+
+	parts := []*genai.Part{
+		genai.NewPartFromText(prompt),
+		{InlineData: &genai.Blob{MIMEType: "image/jpeg", Data: coverData}},
+		{InlineData: &genai.Blob{MIMEType: "image/png", Data: shellData}},
+	}
+
+	contents := []*genai.Content{
+		genai.NewContentFromParts(parts, genai.RoleUser),
+	}
+
+	result, err := client.Models.GenerateContent(ctx, "gemini-3.1-flash-image-preview", contents, nil)
+	if err != nil {
+		return nil, fmt.Errorf("genai generate: %w", err)
+	}
+
+	if len(result.Candidates) == 0 {
+		return nil, fmt.Errorf("no candidates in Google GenAI response")
+	}
+
+	for _, part := range result.Candidates[0].Content.Parts {
+		if part.InlineData != nil && len(part.InlineData.Data) > 0 {
+			return part.InlineData.Data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no image in Google GenAI response")
 }
 
 // generateViaOpenRouterShellGuided sends cover + shell template to the AI
