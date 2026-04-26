@@ -10,6 +10,7 @@ import (
 	"github.com/coolcassette/coolcassette/api"
 	"github.com/coolcassette/coolcassette/internal/audio"
 	"github.com/coolcassette/coolcassette/internal/reel"
+	"github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/gin-gonic/gin"
 )
@@ -52,9 +53,9 @@ func New(cfg Config) (*App, error) {
 	audio.SetMagickPath(magickPath)
 	tape.SetMagickPath(magickPath)
 	reel.SetMagickPath(magickPath)
-	shellsDir, err := resolveShellsDir()
+	shellsDir, err := shell.EnsureDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract shell templates: %w", err)
 	}
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {

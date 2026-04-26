@@ -12,6 +12,7 @@ import (
 	"github.com/coolcassette/coolcassette/internal/deploy"
 	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
+	shellpkg "github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
 	"github.com/schollz/progressbar/v3"
@@ -48,7 +49,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Resolve shells directory (embedded assets next to binary)
-	shellsDir, err := resolveShellsDir()
+	shellsDir, err := shellpkg.EnsureDir()
 	if err != nil {
 		return err
 	}
@@ -315,27 +316,4 @@ func resolveEtc1Tool() (string, error) {
 	return "", fmt.Errorf("etc1tool not found. Download Android platform-tools from:\nhttps://dl.google.com/android/repository/platform-tools-latest-darwin.zip\nand place etc1tool next to the coolcassette binary.")
 }
 
-// resolveShellsDir finds the assets/templates directory.
-func resolveShellsDir() (string, error) {
-	exe, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "assets", "templates")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-	}
 
-	// Dev mode: look in cwd
-	cwd, _ := os.Getwd()
-	candidate := filepath.Join(cwd, "assets", "templates")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
-	}
-	// Also try templates/ directly (project root)
-	candidate = filepath.Join(cwd, "templates")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
-	}
-
-	return "", fmt.Errorf("shell templates not found. Expected assets/templates/ directory.")
-}

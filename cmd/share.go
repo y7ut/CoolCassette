@@ -11,6 +11,7 @@ import (
 	"github.com/coolcassette/coolcassette/internal/preview"
 	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
+	shellpkg "github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
 	"github.com/schollz/progressbar/v3"
@@ -58,7 +59,7 @@ func runShare(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	shellsDir, err := resolveShellsDir()
+	shellsDir, err := shellpkg.EnsureDir()
 	if err != nil {
 		return err
 	}

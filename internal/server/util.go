@@ -67,26 +67,6 @@ func resolveMagick() string {
 	return "magick"
 }
 
-func resolveShellsDir() (string, error) {
-	exe, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "assets", "templates")
-		if dirExists(candidate) {
-			return candidate, nil
-		}
-	}
-	cwd, _ := os.Getwd()
-	for _, candidate := range []string{
-		filepath.Join(cwd, "assets", "templates"),
-		filepath.Join(cwd, "templates"),
-	} {
-		if dirExists(candidate) {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("shell templates not found")
-}
-
 func resolveShell(shell string) string {
 	switch shell {
 	case "chf", "bhf":

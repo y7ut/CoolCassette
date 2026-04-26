@@ -9,6 +9,7 @@ import (
 	"github.com/coolcassette/coolcassette/internal/audio"
 	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
+	shellpkg "github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
 	"github.com/spf13/cobra"
@@ -39,7 +40,7 @@ func init() {
 func runPreview(cmd *cobra.Command, args []string) error {
 	albumDir := args[0]
 
-	shellsDir, err := resolveShellsDir()
+	shellsDir, err := shellpkg.EnsureDir()
 	if err != nil {
 		return err
 	}

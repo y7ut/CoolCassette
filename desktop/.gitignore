@@ -1,7 +1,5 @@
 frontend_dist/*
 !frontend_dist/.gitkeep
-assets/*
-!assets/templates/
 build/
 CoolCassette
 CoolCassette.app
