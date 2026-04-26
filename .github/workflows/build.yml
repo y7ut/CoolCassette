@@ -28,6 +28,12 @@ jobs:
       - name: Install ImageMagick
         run: brew install imagemagick
 
+      - name: Download Android Platform Tools
+        run: |
+          curl -sL https://dl.google.com/android/repository/platform-tools-latest-darwin.zip -o platform-tools.zip
+          unzip -q platform-tools.zip
+          mv platform-tools platform-tools-macos
+
       - name: Build
         run: bash desktop/build-app.sh
         env:
@@ -64,6 +70,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           working-directory: web
+
+      - name: Download Android Platform Tools
+        shell: bash
+        run: |
+          curl -sL https://dl.google.com/android/repository/platform-tools-latest-windows.zip -o platform-tools.zip
+          unzip -q platform-tools.zip
+          mv platform-tools platform-tools-win
 
       - name: Build
         shell: bash
