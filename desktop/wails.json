@@ -3,7 +3,7 @@
   "name": "CoolCassette",
   "outputfilename": "CoolCassette",
   "frontend:install": "npm install",
-  "frontend:build": "npm run build",
+  "frontend:build": "npm run build --if-present",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "assetdir": "../web/dist",
