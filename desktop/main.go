@@ -90,6 +90,9 @@ func main() {
 		Height:    720,
 		MinWidth:  800,
 		MinHeight: 600,
+		Bind: []interface{}{
+			app,
+		},
 		AssetServer: &assetserver.Options{
 			Assets: distFS,
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
