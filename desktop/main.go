@@ -83,7 +83,7 @@ func main() {
 	lg.Printf("starting wails window...")
 
 	distFS, _ := fs.Sub(frontendAssets, "frontend_dist")
-	app := &App{}
+	app := &App{svc: srvApp}
 	err = wails.Run(&options.App{
 		Title:     "CoolCassette",
 		Width:     1024,
