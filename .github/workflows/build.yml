@@ -82,15 +82,14 @@ jobs:
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          VERSION="${GITHUB_REF_NAME:-dev}"
-          STAGE="desktop/build/dist/CoolCassette"
-          mkdir -p "$STAGE"
-          cp desktop/build/bin/CoolCassette.exe "$STAGE/"
-          cp -R platform-tools-win "$STAGE/platform-tools"
-          cd desktop/build/dist
-          zip -r "$GITHUB_WORKSPACE/desktop/CoolCassette-${VERSION}-windows-amd64.zip" CoolCassette
+          $version = "${env:GITHUB_REF_NAME}"
+          $stage = "desktop/build/dist/CoolCassette"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item desktop/build/bin/CoolCassette.exe $stage/
+          Copy-Item -Recurse platform-tools-win "$stage/platform-tools"
+          Compress-Archive -Path $stage -DestinationPath "desktop/CoolCassette-$version-windows-amd64.zip"
 
       - uses: actions/upload-artifact@v7
         with:
