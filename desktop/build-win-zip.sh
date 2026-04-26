@@ -17,7 +17,7 @@ cp -R "$ROOT/web/dist" frontend_dist
 
 echo "==> Cross-compiling for windows/amd64..."
 CGO_ENABLED=1 GOOS=windows GOARCH=amd64 \
-  wails build -skipbindings -tags "desktop,production" -platform windows/amd64 -o "${NAME}.exe" 2>&1 | tail -5
+  wails build -s -tags "desktop,production" -platform windows/amd64 -o "${NAME}.exe" 2>&1 | tail -5
 
 echo "==> Assembling zip package..."
 rm -rf "$OUTDIR"

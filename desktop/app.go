@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,7 @@ import (
 type App struct {
 	ctx context.Context
 	svc *ccserver.App
+	lg  *log.Logger
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -51,15 +53,29 @@ func (a *App) ListAlbums(limit int, sortBy, order, cursor string) (any, error) {
 }
 
 func (a *App) GetAlbum(id string) (any, error) {
-	return a.svc.GetAlbum(a.ctx, id)
+	result, err := a.svc.GetAlbum(a.ctx, id)
+	if err != nil {
+		a.lg.Printf("IPC GetAlbum id=%s error: %v", id, err)
+	}
+	return result, err
 }
 
 func (a *App) GeneratePreview(id string, force bool) (any, error) {
-	return a.svc.GeneratePreview(a.ctx, id, api.ForceRequest{Force: force})
+	a.lg.Printf("IPC GeneratePreview id=%s force=%v", id, force)
+	result, err := a.svc.GeneratePreview(a.ctx, id, api.ForceRequest{Force: force})
+	if err != nil {
+		a.lg.Printf("IPC GeneratePreview error: %v", err)
+	}
+	return result, err
 }
 
 func (a *App) PublishAlbum(id string, force bool) (any, error) {
-	return a.svc.PublishAlbum(a.ctx, id, api.ForceRequest{Force: force})
+	a.lg.Printf("IPC PublishAlbum id=%s force=%v", id, force)
+	result, err := a.svc.PublishAlbum(a.ctx, id, api.ForceRequest{Force: force})
+	if err != nil {
+		a.lg.Printf("IPC PublishAlbum error: %v", err)
+	}
+	return result, err
 }
 
 type fsEntry struct {

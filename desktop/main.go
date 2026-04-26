@@ -5,7 +5,6 @@ import (
 	"embed"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,17 +42,6 @@ func initLogger() *log.Logger {
 func main() {
 	lg := initLogger()
 
-	addr := "127.0.0.1:7350"
-	if v := os.Getenv("COOLCASSETTE_LISTEN"); v != "" {
-		addr = v
-	}
-
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		lg.Fatalf("listen %s: %v", addr, err)
-	}
-	lg.Printf("listening on %s", listener.Addr().String())
-
 	musicDirs := parseMultiEnv("COOLCASSETTE_MUSIC_DIRS", "MUSIC_DIR")
 	wampyDir := envOr("WAMPY_DIR", "")
 	lg.Printf("music_dirs=%v wampy_dir=%q", musicDirs, wampyDir)
@@ -71,19 +59,8 @@ func main() {
 	}
 	lg.Printf("server initialized")
 
-	engine := srvApp.NewEngine()
-	srv := &http.Server{Handler: engine}
-
-	go func() {
-		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
-			lg.Printf("server error: %v", err)
-		}
-	}()
-
-	lg.Printf("starting wails window...")
-
 	distFS, _ := fs.Sub(frontendAssets, "frontend_dist")
-	app := &App{svc: srvApp}
+	app := &App{svc: srvApp, lg: lg}
 	err = wails.Run(&options.App{
 		Title:     "CoolCassette",
 		Width:     1024,
@@ -95,25 +72,20 @@ func main() {
 		},
 		AssetServer: &assetserver.Options{
 			Assets: distFS,
-			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				lg.Printf("[handler] %s %s", r.Method, r.URL.Path)
-				engine.ServeHTTP(w, r)
-			}),
 			Middleware: func(next http.Handler) http.Handler {
+				fh := newFileHandler(lg, srvApp)
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					lg.Printf("[mw] %s %s  host=%s", r.Method, r.URL.Path, r.Host)
-					if strings.HasPrefix(r.URL.Path, "/api/") {
-						engine.ServeHTTP(w, r)
+					if strings.HasPrefix(r.URL.Path, "/api/albums/") {
+						fh.ServeHTTP(w, r)
 						return
 					}
 					next.ServeHTTP(w, r)
 				})
 			},
 		},
-		OnStartup:  app.startup,
-		OnShutdown: func(ctx context.Context) {
+		OnStartup: app.startup,
+		OnShutdown: func(_ context.Context) {
 			lg.Printf("shutting down...")
-			srv.Shutdown(ctx)
 			srvApp.Close()
 		},
 		Mac: &mac.Options{
@@ -129,6 +101,47 @@ func main() {
 		lg.Fatalf("wails run: %v", err)
 	}
 	lg.Printf("exited cleanly")
+}
+
+func newFileHandler(lg *log.Logger, svc *ccserver.App) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if !strings.HasPrefix(path, "/api/albums/") {
+			http.NotFound(w, r)
+			return
+		}
+
+		parts := strings.Split(strings.TrimPrefix(path, "/api/albums/"), "/")
+		if len(parts) < 3 {
+			http.NotFound(w, r)
+			return
+		}
+
+		id := parts[0]
+		kind := parts[1]
+		name := strings.Join(parts[2:], "/")
+		var filePath string
+		var err error
+
+		switch kind {
+		case "assets":
+			filePath, err = svc.AlbumAssetPath(r.Context(), id, name)
+		case "published":
+			filePath, err = svc.PublishedAssetPath(r.Context(), id, name)
+		case "tracks":
+			filePath, err = svc.AlbumTrackPath(r.Context(), id, name)
+		default:
+			http.NotFound(w, r)
+			return
+		}
+
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, filePath)
+	})
 }
 
 func envOr(keys ...string) string {
