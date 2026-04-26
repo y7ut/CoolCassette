@@ -5,100 +5,108 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
-jobs:
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NODE_OPTIONS: "--max-old-space-size=4096"
 
-      - uses: actions/setup-go@v5
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/arm64
+            artifact: CoolCassette-macos-arm64
+          - os: windows-latest
+            platform: windows/amd64
+            artifact: CoolCassette-windows-amd64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
 
+      - uses: actions/setup-node@v6
+
       - name: Setup Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - uses: actions/setup-node@v4
-        with:
-          working-directory: web
 
       - name: Install frontend deps
         run: npm ci
         working-directory: web
 
-      - name: Download Android Platform Tools
+      - name: Build frontend
+        run: npm run build
+        working-directory: web
+
+      - name: Sync frontend_dist
+        shell: bash
+        run: |
+          rm -rf desktop/frontend_dist
+          cp -R web/dist desktop/frontend_dist
+
+      - name: Download Android Platform Tools (macOS)
+        if: runner.os == 'macOS'
         run: |
           curl -sL https://dl.google.com/android/repository/platform-tools-latest-darwin.zip -o platform-tools.zip
           unzip -q platform-tools.zip
           mv platform-tools platform-tools-macos
 
-      - name: Build
-        run: bash desktop/build-app.sh
-        env:
-          COOLCASSETTE_MUSIC_DIRS: ""
-          WAMPY_DIR: ""
-          SKIP_MAGICK_CHECK: "1"
-
-      - name: Package tar.gz
-        run: |
-          VERSION="${GITHUB_REF_NAME:-dev}"
-          mkdir -p desktop/build/dist-macos
-          tar -czf "desktop/build/dist-macos/CoolCassette-${VERSION}-macos-arm64.tar.gz" \
-            -C desktop/build/bin CoolCassette.app
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: CoolCassette-macos-arm64
-          path: desktop/build/dist-macos/*.tar.gz
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.26"
-
-      - name: Setup Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - uses: actions/setup-node@v4
-        with:
-          working-directory: web
-
-      - name: Install frontend deps
-        run: npm ci
-        working-directory: web
-
-      - name: Download Android Platform Tools
+      - name: Download Android Platform Tools (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           curl -sL https://dl.google.com/android/repository/platform-tools-latest-windows.zip -o platform-tools.zip
           unzip -q platform-tools.zip
           mv platform-tools platform-tools-win
 
-      - name: Build
+      - name: Build Wails app
         shell: bash
-        run: bash desktop/build-win-zip.sh "${GITHUB_REF_NAME:-dev}"
+        working-directory: desktop
+        run: wails build -tags "desktop,production" -s -skipbindings -platform ${{ matrix.platform }} -v 2
 
-      - uses: actions/upload-artifact@v4
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          cp -R platform-tools-macos desktop/build/bin/CoolCassette.app/Contents/MacOS/platform-tools
+          mkdir -p desktop/build/dist
+          tar -czf "desktop/build/dist/CoolCassette-${VERSION}-macos-arm64.tar.gz" \
+            -C desktop/build/bin CoolCassette.app
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          STAGE="desktop/build/dist/CoolCassette"
+          mkdir -p "$STAGE"
+          cp desktop/build/bin/CoolCassette.exe "$STAGE/"
+          cp -R platform-tools-win "$STAGE/platform-tools"
+          cd desktop/build/dist
+          zip -r "$GITHUB_WORKSPACE/desktop/CoolCassette-${VERSION}-windows-amd64.zip" CoolCassette
+
+      - uses: actions/upload-artifact@v7
         with:
-          name: CoolCassette-windows-amd64
-          path: desktop/*.zip
+          name: ${{ matrix.artifact }}
+          path: |
+            desktop/build/dist/*.tar.gz
+            desktop/*.zip
 
   release:
-    needs: [build-macos, build-windows]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true

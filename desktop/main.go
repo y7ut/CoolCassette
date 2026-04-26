@@ -21,6 +21,9 @@ import (
 //go:embed all:frontend_dist
 var frontendAssets embed.FS
 
+//go:embed assets/templates/shell_chf.png assets/templates/shell_bhf.png
+var shellTemplates embed.FS
+
 func initLogger() *log.Logger {
 	exe, _ := os.Executable()
 	logDir := filepath.Join(filepath.Dir(exe), "..", "Logs")
@@ -41,6 +44,10 @@ func initLogger() *log.Logger {
 
 func main() {
 	lg := initLogger()
+
+	if err := extractShellTemplates(); err != nil {
+		lg.Fatalf("extract shell templates: %v", err)
+	}
 
 	uc := ccserver.LoadUserConfig()
 	musicDirs := parseMultiEnv("COOLCASSETTE_MUSIC_DIRS", "MUSIC_DIR")
@@ -221,4 +228,29 @@ func trimSpace(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+func extractShellTemplates() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(filepath.Dir(exe), "assets", "templates")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	sub, err := fs.Sub(shellTemplates, "assets/templates")
+	if err != nil {
+		return err
+	}
+	return fs.WalkDir(sub, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(sub, path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, path), data, 0644)
+	})
 }
