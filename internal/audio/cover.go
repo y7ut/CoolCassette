@@ -52,6 +52,10 @@ func ExtractCover(filePath string) (*CoverImage, error) {
 	}
 }
 
+var magickBin = "magick"
+
+func SetMagickPath(p string) { magickBin = p }
+
 // findCoverFile looks for cover.{jpg,jpeg,png,webp} in dir (case-insensitive),
 // resizes it to 400×400 via magick, and returns the bytes.
 func findCoverFile(dir string) (*CoverImage, error) {
@@ -82,29 +86,21 @@ func findCoverFile(dir string) (*CoverImage, error) {
 
 		imgPath := filepath.Join(dir, entry.Name())
 
-		// Resize to 400×400 (fit within, no upscale distortion) via magick,
-		// output as JPEG to a temp file then read back.
-		tmp, err := os.CreateTemp("", "coolcassette-cover-*.jpg")
-		if err != nil {
-			return nil, fmt.Errorf("cover file: create temp: %w", err)
-		}
-		tmp.Close()
-		defer os.Remove(tmp.Name())
-
-		cmd := exec.Command("magick", imgPath,
+		cmd := exec.Command(magickBin, imgPath,
 			"-resize", "400x400>",
 			"-quality", "85",
-			tmp.Name(),
+			"-",
 		)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("cover file: resize %s: %w\n%s", imgPath, err, string(out))
+		if data, err := cmd.Output(); err == nil && len(data) > 0 {
+			return &CoverImage{Data: data, Format: "jpeg"}, nil
 		}
 
-		data, err := os.ReadFile(tmp.Name())
+		data, err := os.ReadFile(imgPath)
 		if err != nil {
-			return nil, fmt.Errorf("cover file: read resized: %w", err)
+			return nil, fmt.Errorf("cover file: read: %w", err)
 		}
-		return &CoverImage{Data: data, Format: "jpeg"}, nil
+		fmt := formatFromExt(ext)
+		return &CoverImage{Data: data, Format: fmt}, nil
 	}
 	return nil, fmt.Errorf("no cover file found in %s", dir)
 }
@@ -235,6 +231,14 @@ func isValidImage(data []byte) bool {
 func mimeToFormat(mime string) string {
 	mime = strings.ToLower(mime)
 	if strings.Contains(mime, "png") {
+		return "png"
+	}
+	return "jpeg"
+}
+
+func formatFromExt(ext string) string {
+	ext = strings.ToLower(ext)
+	if ext == ".png" {
 		return "png"
 	}
 	return "jpeg"

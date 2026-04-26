@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -49,6 +50,21 @@ func resolveEtc1Tool() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("etc1tool not found")
+}
+
+func resolveMagick() string {
+	for _, p := range []string{
+		"/opt/homebrew/bin/magick",
+		"/usr/local/bin/magick",
+	} {
+		if fileExists(p) {
+			return p
+		}
+	}
+	if p, err := exec.LookPath("magick"); err == nil {
+		return p
+	}
+	return "magick"
 }
 
 func resolveShellsDir() (string, error) {

@@ -17,8 +17,11 @@ import (
 	"google.golang.org/genai"
 )
 
+var magickBin = "magick"
+
+func SetMagickPath(p string) { magickBin = p }
+
 const (
-	// Label area coordinates on the 800x480 canvas
 	LabelX      = 54
 	LabelY      = 42
 	LabelWidth  = 694
@@ -121,7 +124,7 @@ func RenderShellGuided(
 		}
 		defer os.Remove(tmpRaw)
 
-		cmd := exec.CommandContext(ctx, "magick", tmpRaw,
+		cmd := exec.CommandContext(ctx, magickBin, tmpRaw,
 			"-resize", fmt.Sprintf("%dx%d!", CanvasWidth, CanvasHeight),
 			"-depth", "8",
 			pngPath,
@@ -182,7 +185,7 @@ func RenderPreviewShellGuided(
 	}
 	defer os.Remove(tmpRaw)
 
-	cmd := exec.CommandContext(ctx, "magick", tmpRaw,
+	cmd := exec.CommandContext(ctx, magickBin, tmpRaw,
 		"-resize", fmt.Sprintf("%dx%d!", CanvasWidth, CanvasHeight),
 		"-depth", "8",
 		outPath,
@@ -461,7 +464,7 @@ func generateViaOpenRouterShellGuided(ctx context.Context, coverData, shellData 
 // CompositeTapePublic composites a sticker/core_tape image onto the 800×480 shell template.
 // Used by the core_tape manual override path.
 func CompositeTapePublic(stickerPath, shellPath, outPath string) error {
-	cmd := exec.Command("magick",
+	cmd := exec.Command(magickBin,
 		"-size", fmt.Sprintf("%dx%d", CanvasWidth, CanvasHeight),
 		"xc:#000000",
 		"(", stickerPath, "-resize", fmt.Sprintf("%dx%d!", LabelWidth, LabelHeight), ")",

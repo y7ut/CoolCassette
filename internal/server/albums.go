@@ -206,6 +206,9 @@ func (a *App) coverCacheForAlbum(record albumRecord) (string, error) {
 	dst := filepath.Join(cacheDir, ".cover.ccimg")
 	firstInfo, err := os.Stat(record.FirstAudioFile)
 	if err != nil {
+		if _, err := os.Stat(dst); err == nil {
+			return dst, nil
+		}
 		return "", err
 	}
 	if info, err := os.Stat(dst); err == nil && !info.ModTime().Before(firstInfo.ModTime()) {

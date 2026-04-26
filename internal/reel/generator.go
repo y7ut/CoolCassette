@@ -231,9 +231,13 @@ func compositeFrame(templatePath, leftRot, rightRot string, lx, ly, rx, ry int, 
 	)
 }
 
+var magickBin = "magick"
+
+func SetMagickPath(p string) { magickBin = p }
+
 // magickRun executes ImageMagick with the given arguments.
 func magickRun(args ...string) error {
-	cmd := exec.Command("magick", args...)
+	cmd := exec.Command(magickBin, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("magick %v: %w\n%s", args[0], err, string(out))
 	}

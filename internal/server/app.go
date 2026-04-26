@@ -8,6 +8,9 @@ import (
 	"sync"
 
 	"github.com/coolcassette/coolcassette/api"
+	"github.com/coolcassette/coolcassette/internal/audio"
+	"github.com/coolcassette/coolcassette/internal/reel"
+	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,6 +48,10 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	magickPath := resolveMagick()
+	audio.SetMagickPath(magickPath)
+	tape.SetMagickPath(magickPath)
+	reel.SetMagickPath(magickPath)
 	shellsDir, err := resolveShellsDir()
 	if err != nil {
 		return nil, err
