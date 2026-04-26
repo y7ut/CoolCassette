@@ -76,6 +76,7 @@ func (a *App) ensureDecodedPKM(src, dst string) error {
 	}
 
 	cmd := exec.Command(a.etc1toolPath, "--decode", src, "-o", dst)
+	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("decode pkm: %w\n%s", err, string(out))
 	}

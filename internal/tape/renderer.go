@@ -129,6 +129,7 @@ func RenderShellGuided(
 			"-depth", "8",
 			pngPath,
 		)
+		hideWindow(cmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("resize tape image: %w\n%s", err, string(out))
 		}
@@ -190,6 +191,7 @@ func RenderPreviewShellGuided(
 		"-depth", "8",
 		outPath,
 	)
+	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("resize tape image: %w\n%s", err, string(out))
 	}
@@ -239,6 +241,7 @@ func copyFile(src, dst string) error {
 // encodePKM compresses a PNG to ETC1 PKM format using etc1tool.
 func encodePKM(etc1toolPath, pngPath, pkmPath string) error {
 	cmd := exec.Command(etc1toolPath, pngPath, "-o", pkmPath)
+	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("etc1tool: %w\n%s", err, string(out))
 	}
@@ -475,6 +478,7 @@ func CompositeTapePublic(stickerPath, shellPath, outPath string) error {
 		"-depth", "8",
 		outPath,
 	)
+	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("magick composite: %w\n%s", err, string(out))
 	}

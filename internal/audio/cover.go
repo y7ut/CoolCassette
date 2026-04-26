@@ -91,6 +91,7 @@ func findCoverFile(dir string) (*CoverImage, error) {
 			"-quality", "85",
 			"-",
 		)
+		hideWindow(cmd)
 		if data, err := cmd.Output(); err == nil && len(data) > 0 {
 			return &CoverImage{Data: data, Format: "jpeg"}, nil
 		}

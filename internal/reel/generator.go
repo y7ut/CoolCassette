@@ -65,6 +65,7 @@ func BuildAtlas(reelPNGPath, outDir, etc1toolPath string, p Params, animDelayMS 
 	// 1. Compress reel.png → atlas.pkm
 	atlasPKM := filepath.Join(outDir, "atlas.pkm")
 	cmd := exec.Command(etc1toolPath, reelPNGPath, "-o", atlasPKM)
+	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("reel atlas: etc1tool: %w\n%s", err, string(out))
 	}
@@ -238,6 +239,7 @@ func SetMagickPath(p string) { magickBin = p }
 // magickRun executes ImageMagick with the given arguments.
 func magickRun(args ...string) error {
 	cmd := exec.Command(magickBin, args...)
+	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("magick %v: %w\n%s", args[0], err, string(out))
 	}
