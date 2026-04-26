@@ -23,7 +23,7 @@ var frontendAssets embed.FS
 
 func initLogger() *log.Logger {
 	exe, _ := os.Executable()
-	logDir := filepath.Join(filepath.Dir(exe), "..", "Logs")
+	logDir := filepath.Join(filepath.Dir(exe), ".", "log")
 	os.MkdirAll(logDir, 0755)
 	logPath := filepath.Join(logDir, "coolcassette.log")
 

@@ -12,6 +12,7 @@ import (
 	"github.com/coolcassette/coolcassette/internal/deploy"
 	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
+	"github.com/coolcassette/coolcassette/internal/server"
 	shellpkg "github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
@@ -43,7 +44,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Resolve etc1tool path (look next to binary, then in PATH)
-	etc1toolPath, err := resolveEtc1Tool()
+	etc1toolPath, err := server.ResolveEtc1Tool()
 	if err != nil {
 		return err
 	}
@@ -284,36 +285,6 @@ func copyFileLocal(src, dst string) error {
 		return err
 	}
 	return out.Sync()
-}
-
-// resolveEtc1Tool finds etc1tool next to the binary or falls back to PATH.
-func resolveEtc1Tool() (string, error) {
-	// Check next to binary (platform-tools/etc1tool)
-	exe, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "platform-tools", "etc1tool")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-		// Also check same dir as binary
-		candidate = filepath.Join(filepath.Dir(exe), "etc1tool")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-	}
-
-	// Check in current working directory (dev mode)
-	cwd, _ := os.Getwd()
-	candidate := filepath.Join(cwd, "platform-tools", "etc1tool")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
-	}
-	candidate = filepath.Join(cwd, "etc1tool")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
-	}
-
-	return "", fmt.Errorf("etc1tool not found. Download Android platform-tools from:\nhttps://dl.google.com/android/repository/platform-tools-latest-darwin.zip\nand place etc1tool next to the coolcassette binary.")
 }
 
 

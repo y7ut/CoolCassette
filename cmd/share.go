@@ -11,6 +11,7 @@ import (
 	"github.com/coolcassette/coolcassette/internal/preview"
 	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
+	"github.com/coolcassette/coolcassette/internal/server"
 	shellpkg "github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
@@ -54,7 +55,7 @@ func runShare(cmd *cobra.Command, args []string) error {
 		outDir = "share"
 	}
 
-	etc1toolPath, err := resolveEtc1Tool()
+	etc1toolPath, err := server.ResolveEtc1Tool()
 	if err != nil {
 		return err
 	}

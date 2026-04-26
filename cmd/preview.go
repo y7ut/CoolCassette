@@ -9,6 +9,7 @@ import (
 	"github.com/coolcassette/coolcassette/internal/audio"
 	reelgen "github.com/coolcassette/coolcassette/internal/reel"
 	"github.com/coolcassette/coolcassette/internal/scanner"
+	"github.com/coolcassette/coolcassette/internal/server"
 	shellpkg "github.com/coolcassette/coolcassette/internal/shell"
 	"github.com/coolcassette/coolcassette/internal/tape"
 	"github.com/coolcassette/coolcassette/internal/theme"
@@ -137,7 +138,7 @@ func runPreview(cmd *cobra.Command, args []string) error {
 
 	// Notify about etc1tool for final deploy
 	fmt.Printf("\nTo compress for Wampy:\n")
-	etc1, _ := resolveEtc1Tool()
+	etc1, _ := server.ResolveEtc1Tool()
 	if etc1 == "" {
 		etc1 = "./platform-tools/etc1tool"
 	}

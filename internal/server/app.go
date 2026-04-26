@@ -45,11 +45,11 @@ type App struct {
 
 // New constructs an App, resolves tool paths, and builds the initial SQLite index.
 func New(cfg Config) (*App, error) {
-	etc1toolPath, err := resolveEtc1Tool()
+	etc1toolPath, err := ResolveEtc1Tool()
 	if err != nil {
 		return nil, err
 	}
-	magickPath := resolveMagick()
+	magickPath := ResolveMagick()
 	audio.SetMagickPath(magickPath)
 	tape.SetMagickPath(magickPath)
 	reel.SetMagickPath(magickPath)

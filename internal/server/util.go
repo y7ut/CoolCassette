@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -28,43 +29,63 @@ func albumID(musicDir, albumDir string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func resolveEtc1Tool() (string, error) {
+func ResolveEtc1Tool() (string, error) {
+	names := []string{"etc1tool"}
+	if exeSuffix != "" {
+		names = append(names, "etc1tool"+exeSuffix)
+	}
 	exe, err := os.Executable()
 	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "platform-tools", "etc1tool")
-		if fileExists(candidate) {
-			return candidate, nil
-		}
-		candidate = filepath.Join(filepath.Dir(exe), "etc1tool")
-		if fileExists(candidate) {
-			return candidate, nil
+		for _, n := range names {
+			for _, sub := range []string{"platform-tools", "."} {
+				candidate := filepath.Join(filepath.Dir(exe), sub, n)
+				if fileExists(candidate) {
+					return candidate, nil
+				}
+			}
 		}
 	}
 	cwd, _ := os.Getwd()
-	for _, candidate := range []string{
-		filepath.Join(cwd, "platform-tools", "etc1tool"),
-		filepath.Join(cwd, "etc1tool"),
-	} {
-		if fileExists(candidate) {
-			return candidate, nil
+	for _, n := range names {
+		for _, sub := range []string{"platform-tools", "."} {
+			if fileExists(filepath.Join(cwd, sub, n)) {
+				return filepath.Join(cwd, sub, n), nil
+			}
 		}
 	}
 	return "", fmt.Errorf("etc1tool not found")
 }
 
-func resolveMagick() string {
-	for _, p := range []string{
-		"/opt/homebrew/bin/magick",
-		"/usr/local/bin/magick",
-	} {
+func ResolveMagick() string {
+	for _, p := range magickCandidates() {
 		if fileExists(p) {
 			return p
 		}
 	}
-	if p, err := exec.LookPath("magick"); err == nil {
+	if p, err := exec.LookPath("magick" + exeSuffix); err == nil {
 		return p
 	}
 	return "magick"
+}
+
+func magickCandidates() []string {
+	if runtimeOS == "windows" {
+		globs, _ := filepath.Glob("C:/Program Files/ImageMagick*/magick.exe")
+		result := make([]string, len(globs))
+		copy(result, globs)
+		return result
+	}
+	return []string{"/opt/homebrew/bin/magick", "/usr/local/bin/magick"}
+}
+
+var exeSuffix string
+var runtimeOS string
+
+func init() {
+	runtimeOS = runtime.GOOS
+	if runtimeOS == "windows" {
+		exeSuffix = ".exe"
+	}
 }
 
 func resolveShell(shell string) string {
