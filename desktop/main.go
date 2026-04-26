@@ -42,15 +42,21 @@ func initLogger() *log.Logger {
 func main() {
 	lg := initLogger()
 
+	uc := ccserver.LoadUserConfig()
 	musicDirs := parseMultiEnv("COOLCASSETTE_MUSIC_DIRS", "MUSIC_DIR")
 	wampyDir := envOr("WAMPY_DIR", "")
-	lg.Printf("music_dirs=%v wampy_dir=%q", musicDirs, wampyDir)
+	apiKey := envOr("API_KEY", uc.APIKey)
+	provider := envOr("PROVIDER", uc.Provider)
+	if provider == "" {
+		provider = "openrouter"
+	}
+	lg.Printf("music_dirs=%v wampy_dir=%q provider=%s", musicDirs, wampyDir, provider)
 
 	srvApp, err := ccserver.New(ccserver.Config{
 		MusicDirs: musicDirs,
 		WampyDir:  wampyDir,
-		APIKey:    envOr("API_KEY", ""),
-		Provider:  envOr("PROVIDER", "openrouter"),
+		APIKey:    apiKey,
+		Provider:  provider,
 		Shell:     envOr("SHELL", "random"),
 		Verbose:   os.Getenv("VERBOSE") != "",
 	})
