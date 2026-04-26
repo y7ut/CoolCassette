@@ -20,13 +20,13 @@ jobs:
       - name: Setup Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           working-directory: web
 
-      - name: Install ImageMagick
-        run: brew install imagemagick
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: web
 
       - name: Download Android Platform Tools
         run: |
@@ -39,6 +39,7 @@ jobs:
         env:
           COOLCASSETTE_MUSIC_DIRS: ""
           WAMPY_DIR: ""
+          SKIP_MAGICK_CHECK: "1"
 
       - name: Package tar.gz
         run: |
@@ -66,10 +67,13 @@ jobs:
       - name: Setup Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           working-directory: web
+
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: web
 
       - name: Download Android Platform Tools
         shell: bash

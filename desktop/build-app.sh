@@ -2,10 +2,12 @@
 set -e
 cd "$(dirname "$0")"
 
-if ! command -v magick &>/dev/null; then
-    echo "ERROR: magick (ImageMagick) not found in PATH"
-    echo "  brew install imagemagick"
-    exit 1
+if [ "${SKIP_MAGICK_CHECK:-}" != "1" ]; then
+    if ! command -v magick &>/dev/null; then
+        echo "ERROR: magick (ImageMagick) not found in PATH"
+        echo "  brew install imagemagick"
+        exit 1
+    fi
 fi
 
 APP_BUNDLE="build/bin/CoolCassette.app"
