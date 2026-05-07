@@ -21,6 +21,7 @@ type AlbumListQuery struct {
 	SortBy string `form:"sort_by"`
 	Order  string `form:"order"`
 	Cursor string `form:"cursor"`
+	Search string `form:"q"`
 }
 
 // ListAlbumsRequest is the full service request for a cursor-based album list query.

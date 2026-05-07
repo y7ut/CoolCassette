@@ -38,7 +38,7 @@ func (a *App) BrowseFS(dirPath string) (any, error) {
 	return browseFS(dirPath), nil
 }
 
-func (a *App) ListAlbums(limit int, sortBy, order, cursor string) (any, error) {
+func (a *App) ListAlbums(limit int, sortBy, order, cursor, search string) (any, error) {
 	snap := a.svc.CurrentIndexSnapshot()
 	return a.svc.ListAlbums(a.ctx, api.ListAlbumsRequest{
 		AlbumListQuery: api.AlbumListQuery{
@@ -46,6 +46,7 @@ func (a *App) ListAlbums(limit int, sortBy, order, cursor string) (any, error) {
 			SortBy: sortBy,
 			Order:  order,
 			Cursor: cursor,
+			Search: search,
 		},
 		IndexVersion: snap.Version,
 		IndexHash:    snap.Hash,

@@ -69,6 +69,8 @@ func (a *App) renderAlbumPreview(ctx context.Context, albumDir, firstAudioFile s
 		Shell:    resolveShell(a.cfg.Shell),
 		APIKey:   a.cfg.APIKey,
 		Provider: tape.Provider(a.cfg.Provider),
+		BaseURL:  a.cfg.BaseURL,
+		Model:    a.cfg.Model,
 		Verbose:  a.cfg.Verbose,
 	}
 
@@ -128,6 +130,8 @@ func (a *App) publishAlbum(ctx context.Context, albumDir, slug, firstAudioFile s
 		Shell:    resolvedShell,
 		APIKey:   a.cfg.APIKey,
 		Provider: tape.Provider(a.cfg.Provider),
+		BaseURL:  a.cfg.BaseURL,
+		Model:    a.cfg.Model,
 		Verbose:  a.cfg.Verbose,
 	}
 	renderResult, err := tape.RenderShellGuided(ctx, coverData.Data, colors, outDir, a.shellsDir, a.etc1toolPath, cachedPNG, opts)

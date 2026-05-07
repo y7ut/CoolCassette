@@ -35,9 +35,17 @@ func (a *App) ListAlbums(ctx context.Context, request api.ListAlbumsRequest) (an
 		limit = 200
 	}
 
-	args := make([]any, 0, 4)
+	args := make([]any, 0, 6)
 	query := `SELECT id, dir, name, slug, artist, album, track_count, status, cassette_tape, cassette_reel,
 		cassette_ref_valid, has_cover, created_at, modified_at FROM albums`
+
+	var whereClauses []string
+	if request.Search != "" {
+		search := "%" + strings.ToLower(request.Search) + "%"
+		whereClauses = append(whereClauses, "(LOWER(album) LIKE ? OR LOWER(artist) LIKE ? OR LOWER(name) LIKE ?)")
+		args = append(args, search, search, search)
+	}
+
 	if request.Cursor != "" {
 		cursor, err := decodeCursor(request.Cursor)
 		if err != nil {
@@ -54,12 +62,16 @@ func (a *App) ListAlbums(ctx context.Context, request api.ListAlbumsRequest) (an
 		if order == "DESC" {
 			comparator = "<"
 		}
-		query += " WHERE (" + column + " " + comparator + " ? OR (" + column + " = ? AND id " + comparator + " ?))"
+		whereClauses = append(whereClauses, "("+column+" "+comparator+" ? OR ("+column+" = ? AND id "+comparator+" ?))")
 		cursorValue, err := queryCursorValue(sortBy, cursor.LastValue)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, cursorValue, cursorValue, cursor.LastID)
+	}
+
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 	query += " ORDER BY " + sortColumn(sortBy) + " " + order + ", id " + order + " LIMIT ?"
 	args = append(args, limit+1)

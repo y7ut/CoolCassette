@@ -21,6 +21,8 @@ type Config struct {
 	WampyDir  string
 	APIKey    string
 	Provider  string
+	BaseURL   string
+	Model     string
 	Shell     string
 	Reel      string
 	Verbose   bool

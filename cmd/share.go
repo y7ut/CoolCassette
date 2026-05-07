@@ -188,6 +188,8 @@ func processAlbumShare(ctx context.Context, album scanner.Album, workDir, shells
 		Shell:    resolvedShell,
 		APIKey:   apiKey,
 		Provider: tape.Provider(provider),
+		BaseURL:  baseURL,
+		Model:    model,
 		Verbose:  verbose,
 	}
 
