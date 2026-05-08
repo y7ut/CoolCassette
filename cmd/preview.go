@@ -95,6 +95,8 @@ func runPreview(cmd *cobra.Command, args []string) error {
 		Shell:    resolvedShell,
 		APIKey:   apiKey,
 		Provider: tape.Provider(provider),
+		BaseURL:  baseURL,
+		Model:    model,
 		Verbose:  verbose,
 	}
 

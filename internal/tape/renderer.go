@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/coolcassette/coolcassette/internal/theme"
 	"google.golang.org/genai"
@@ -20,6 +21,10 @@ import (
 var magickBin = "magick"
 
 func SetMagickPath(p string) { magickBin = p }
+
+var customHTTPClient = &http.Client{
+	Timeout: 300 * time.Second,
+}
 
 const (
 	LabelX      = 54
@@ -35,16 +40,17 @@ const (
 type Provider string
 
 const (
-	// ProviderOpenAI     Provider = "openai"
-	ProviderOpenRouter Provider = "openrouter"
-	ProviderGoogle     Provider = "google"
+	ProviderCustom Provider = "custom"
+	ProviderGoogle Provider = "google"
 )
 
 // Options controls tape rendering behavior.
 type Options struct {
 	Shell    string // "chf" or "bhf"
 	APIKey   string
-	Provider Provider // "openai" or "openrouter"
+	Provider Provider // "custom" or "google"
+	BaseURL  string   // custom OpenAI-compatible base URL
+	Model    string   // model name for custom provider
 	Verbose  bool
 }
 
@@ -111,7 +117,7 @@ func RenderShellGuided(
 		case ProviderGoogle:
 			imgBytes, err = generateViaGoogleGenAI(ctx, coverData, shellData, prompt, opts.APIKey)
 		default:
-			imgBytes, err = generateViaOpenRouterShellGuided(ctx, coverData, shellData, prompt, opts.APIKey)
+			imgBytes, err = generateViaCustomOpenAI(ctx, coverData, shellData, prompt, opts)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("generate shell-guided image: %w", err)
@@ -174,7 +180,7 @@ func RenderPreviewShellGuided(
 	case ProviderGoogle:
 		imgBytes, err = generateViaGoogleGenAI(ctx, coverData, shellData, prompt, opts.APIKey)
 	default:
-		imgBytes, err = generateViaOpenRouterShellGuided(ctx, coverData, shellData, prompt, opts.APIKey)
+		imgBytes, err = generateViaCustomOpenAI(ctx, coverData, shellData, prompt, opts)
 	}
 	if err != nil {
 		return fmt.Errorf("generate shell-guided image: %w", err)
@@ -255,6 +261,45 @@ func decodeDataURL(dataURL string) ([]byte, error) {
 		return base64.StdEncoding.DecodeString(dataURL[idx+1:])
 	}
 	return base64.StdEncoding.DecodeString(dataURL)
+}
+
+func extractImageFromContent(raw json.RawMessage) []byte {
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		if imgData, err := extractBase64ImageFromMarkdown(s); err == nil {
+			return imgData
+		}
+	}
+	var parts []struct {
+		Type     string `json:"type"`
+		ImageURL *struct {
+			URL string `json:"url"`
+		} `json:"image_url"`
+	}
+	if err := json.Unmarshal(raw, &parts); err == nil {
+		for _, p := range parts {
+			if p.Type == "image_url" && p.ImageURL != nil && p.ImageURL.URL != "" {
+				if imgData, err := decodeDataURL(p.ImageURL.URL); err == nil {
+					return imgData
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func extractBase64ImageFromMarkdown(content string) ([]byte, error) {
+	start := strings.Index(content, "![image](")
+	if start < 0 {
+		return nil, fmt.Errorf("no markdown image found")
+	}
+	urlStart := start + len("![image](")
+	end := strings.IndexByte(content[urlStart:], ')')
+	if end < 0 {
+		return nil, fmt.Errorf("malformed markdown image")
+	}
+	dataURL := content[urlStart : urlStart+end]
+	return decodeDataURL(dataURL)
 }
 
 func downloadURL(ctx context.Context, url string) ([]byte, error) {
@@ -364,21 +409,36 @@ func generateViaGoogleGenAI(ctx context.Context, coverData, shellData []byte, pr
 	return nil, fmt.Errorf("no image in Google GenAI response")
 }
 
-// generateViaOpenRouterShellGuided sends cover + shell template to the AI
-// and returns the generated full 800×480 tape image bytes.
-func generateViaOpenRouterShellGuided(ctx context.Context, coverData, shellData []byte, prompt, apiKey string) ([]byte, error) {
+func generateViaCustomOpenAI(ctx context.Context, coverData, shellData []byte, prompt string, opts Options) ([]byte, error) {
+	apiKey := opts.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("OPENROUTER_API_KEY")
+		apiKey = os.Getenv("CUSTOM_API_KEY")
 	}
 	if apiKey == "" {
-		return nil, fmt.Errorf("OpenRouter API key not set (use --api-key or OPENROUTER_API_KEY env)")
+		return nil, fmt.Errorf("API key not set (use --api-key or CUSTOM_API_KEY env)")
+	}
+
+	baseURL := opts.BaseURL
+	if baseURL == "" {
+		baseURL = os.Getenv("CUSTOM_BASE_URL")
+	}
+	if baseURL == "" {
+		return nil, fmt.Errorf("base URL not set (use --base-url or CUSTOM_BASE_URL env)")
+	}
+
+	model := opts.Model
+	if model == "" {
+		model = os.Getenv("CUSTOM_MODEL")
+	}
+	if model == "" {
+		return nil, fmt.Errorf("model not set (use --model or CUSTOM_MODEL env)")
 	}
 
 	coverB64 := base64.StdEncoding.EncodeToString(coverData)
 	shellB64 := base64.StdEncoding.EncodeToString(shellData)
 
 	reqBody := map[string]any{
-		"model": "google/gemini-3.1-flash-image-preview",
+		"model": model,
 		"messages": []map[string]any{
 			{
 				"role": "user",
@@ -418,17 +478,17 @@ func generateViaOpenRouterShellGuided(ctx context.Context, coverData, shellData 
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		"https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
+	endpoint := strings.TrimRight(baseURL, "/") + "/chat/completions"
+	apiCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 300*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(apiCtx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://github.com/coolcassette/coolcassette")
-	req.Header.Set("X-Title", "CoolCassette")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := customHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("api request: %w", err)
 	}
@@ -439,13 +499,14 @@ func generateViaOpenRouterShellGuided(ctx context.Context, coverData, shellData 
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("openrouter error %d: %s", resp.StatusCode, string(respData))
+		return nil, fmt.Errorf("api error %d: %s", resp.StatusCode, string(respData))
 	}
 
 	var result struct {
 		Choices []struct {
 			Message struct {
-				Images []struct {
+				Content json.RawMessage `json:"content"`
+				Images  []struct {
 					ImageURL struct {
 						URL string `json:"url"`
 					} `json:"image_url"`
@@ -456,12 +517,20 @@ func generateViaOpenRouterShellGuided(ctx context.Context, coverData, shellData 
 	if err := json.Unmarshal(respData, &result); err != nil {
 		return nil, fmt.Errorf("parse response: %w\n%s", err, string(respData))
 	}
-	if len(result.Choices) == 0 || len(result.Choices[0].Message.Images) == 0 {
-		return nil, fmt.Errorf("no image in openrouter response: %s", string(respData))
+	if len(result.Choices) == 0 {
+		return nil, fmt.Errorf("no image in response: %s", string(respData))
 	}
 
-	dataURL := result.Choices[0].Message.Images[0].ImageURL.URL
-	return decodeDataURL(dataURL)
+	msg := result.Choices[0].Message
+	if len(msg.Images) > 0 && msg.Images[0].ImageURL.URL != "" {
+		return decodeDataURL(msg.Images[0].ImageURL.URL)
+	}
+	if len(msg.Content) > 0 {
+		if imgData := extractImageFromContent(msg.Content); imgData != nil {
+			return imgData, nil
+		}
+	}
+	return nil, fmt.Errorf("no image in response: %s", string(respData))
 }
 
 // CompositeTapePublic composites a sticker/core_tape image onto the 800×480 shell template.

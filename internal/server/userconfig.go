@@ -9,6 +9,8 @@ import (
 type UserConfig struct {
 	APIKey   string `json:"api_key"`
 	Provider string `json:"provider"`
+	BaseURL  string `json:"base_url"`
+	Model    string `json:"model"`
 }
 
 func LoadUserConfig() UserConfig {

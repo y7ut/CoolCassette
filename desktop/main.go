@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -46,21 +47,37 @@ func main() {
 	lg.Printf("user_config: %s", uc)
 	musicDirs := parseMultiEnv("COOLCASSETTE_MUSIC_DIRS", "MUSIC_DIR")
 	wampyDir := envOr("WAMPY_DIR", "")
-	apiKey := envOr("API_KEY", uc.APIKey)
+	apiKey := os.Getenv("API_KEY")
 	if apiKey == "" {
-		apiKey = os.Getenv("OPENROUTER_API_KEY")
+		apiKey = os.Getenv("CUSTOM_API_KEY")
 	}
-	provider := envOr("PROVIDER", uc.Provider)
+	if apiKey == "" {
+		apiKey = uc.APIKey
+	}
+	baseURL := os.Getenv("CUSTOM_BASE_URL")
+	if baseURL == "" {
+		baseURL = uc.BaseURL
+	}
+	model := os.Getenv("CUSTOM_MODEL")
+	if model == "" {
+		model = uc.Model
+	}
+	provider := os.Getenv("PROVIDER")
 	if provider == "" {
-		provider = "openrouter"
+		provider = uc.Provider
 	}
-	lg.Printf("music_dirs=%v wampy_dir=%q provider=%s", musicDirs, wampyDir, provider)
-
+	if provider == "" {
+		provider = "custom"
+	}
+	lg.Printf("music_dirs=%v wampy_dir=%q provider=%s base_url=%s model=%s api_key_set=%v", musicDirs, wampyDir, provider, baseURL, model, apiKey != "")
+	
 	srvApp, err := ccserver.New(ccserver.Config{
 		MusicDirs: musicDirs,
 		WampyDir:  wampyDir,
 		APIKey:    apiKey,
 		Provider:  provider,
+		BaseURL:   baseURL,
+		Model:     model,
 		Shell:     envOr("SHELL", "random"),
 		Verbose:   os.Getenv("VERBOSE") != "",
 	})
@@ -98,6 +115,7 @@ func main() {
 			lg.Printf("shutting down...")
 			srvApp.Close()
 		},
+		Frameless: runtime.GOOS == "windows",
 		Mac: &mac.Options{
 			TitleBar: &mac.TitleBar{
 				TitlebarAppearsTransparent: true,
