@@ -1,5 +1,5 @@
 frontend_dist/*
 !frontend_dist/.gitkeep
-build/
+build/bin/
 CoolCassette
 CoolCassette.app
