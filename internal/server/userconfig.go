@@ -13,20 +13,39 @@ type UserConfig struct {
 	Model    string `json:"model"`
 }
 
-func LoadUserConfig() UserConfig {
-	home, err := os.UserHomeDir()
+func loadConfigFile(path string) (UserConfig, bool) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return UserConfig{}
-	}
-	data, err := os.ReadFile(filepath.Join(home, ".coolcassette.json"))
-	if err != nil {
-		return UserConfig{}
+		return UserConfig{}, false
 	}
 	var cfg UserConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return UserConfig{}
+		return UserConfig{}, false
 	}
-	return cfg
+	return cfg, true
+}
+
+func exeDirConfigPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(exe), "coolcassette.json")
+}
+
+func LoadUserConfig() UserConfig {
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if cfg, ok := loadConfigFile(filepath.Join(home, ".coolcassette.json")); ok {
+			return cfg
+		}
+	}
+	if p := exeDirConfigPath(); p != "" {
+		if cfg, ok := loadConfigFile(p); ok {
+			return cfg
+		}
+	}
+	return UserConfig{}
 }
 
 func SaveUserConfig(cfg UserConfig) error {

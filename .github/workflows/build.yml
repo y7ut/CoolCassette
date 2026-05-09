@@ -75,7 +75,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           VERSION="${GITHUB_REF_NAME:-dev}"
-          cp -R platform-tools-macos desktop/build/bin/CoolCassette.app/Contents/MacOS/platform-tools
+          MACOS_DIR="desktop/build/bin/CoolCassette.app/Contents/MacOS"
+          cp -R platform-tools-macos "$MACOS_DIR/platform-tools"
+          cp desktop/coolcassette.json.example "$MACOS_DIR/coolcassette.json"
           mkdir -p desktop/build/dist
           tar -czf "desktop/build/dist/CoolCassette-${VERSION}-macos-arm64.tar.gz" \
             -C desktop/build/bin CoolCassette.app
@@ -89,6 +91,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           Copy-Item desktop/build/bin/CoolCassette.exe $stage/
           Copy-Item -Recurse platform-tools-win "$stage/platform-tools"
+          Copy-Item desktop/coolcassette.json.example "$stage/coolcassette.json"
           Compress-Archive -Path $stage -DestinationPath "desktop/CoolCassette-$version-windows-amd64.zip"
 
       - uses: actions/upload-artifact@v7
