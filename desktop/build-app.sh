@@ -29,5 +29,8 @@ echo "==> Copying platform-tools..."
 cp -R "$ROOT/platform-tools" "$MACOS_DIR/platform-tools"
 cp -R "$ROOT/assets" "$MACOS_DIR/assets"
 
+echo "==> Copying sample config..."
+cp "coolcassette.json.example" "$MACOS_DIR/coolcassette.json"
+
 echo "==> Done: $APP_BUNDLE"
 ls -lh "$MACOS_DIR/CoolCassette"

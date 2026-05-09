@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -101,6 +102,21 @@ func browseFS(dir string) *fsBrowseResponse {
 		parent = ""
 	}
 	resp := &fsBrowseResponse{Path: dir, Parent: parent}
+
+	if runtime.GOOS == "windows" && dir == `\` {
+		for _, letter := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
+			drive := string(letter) + `:\`
+			if fi, err := os.Stat(drive); err == nil && fi.IsDir() {
+				resp.Entries = append(resp.Entries, fsEntry{
+					Name:  drive,
+					Path:  drive,
+					IsDir: true,
+				})
+			}
+		}
+		return resp
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return resp

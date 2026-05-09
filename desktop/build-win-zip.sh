@@ -36,6 +36,8 @@ fi
 
 cp -R "$ROOT/assets" "$OUTDIR/$NAME/assets"
 
+cp "coolcassette.json.example" "$OUTDIR/$NAME/coolcassette.json"
+
 ZIPNAME="${NAME}-${VERSION}-windows-amd64.zip"
 cd "$OUTDIR"
 rm -f "$ROOT/desktop/$ZIPNAME"
