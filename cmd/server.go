@@ -36,6 +36,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		Verbose:   verbose,
 		Force:     force,
 		Listen:    serverListen,
+		BaseURL:   baseURL,
+		Model:     model,
 	})
 	if err != nil {
 		return err

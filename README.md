@@ -36,8 +36,10 @@ git clone https://github.com/coolcassette/coolcassette
 cd coolcassette && go build -o coolcassette .
 
 # Configure API key
-echo '{"api_key":"sk-or-...","provider":"openrouter"}' > ~/.coolcassette.json
-# or: export OPENROUTER_API_KEY=sk-or-...
+echo '{"api_key":"your-key","provider":"custom","base_url":"https://openrouter.ai/api/v1","model":"google/gemini-3.1-flash-image-preview"}' > ~/.coolcassette.json
+# or: export CUSTOM_API_KEY=your-key
+#     export CUSTOM_BASE_URL=https://openrouter.ai/api/v1
+#     export CUSTOM_MODEL=google/gemini-3.1-flash-image-preview
 
 # Preview one album
 coolcassette preview ~/Music/AlbumName
@@ -55,8 +57,8 @@ coolcassette generate --music-dir ~/Music --wampy-dir /Volumes/WALKMAN/wampy
 | ImageMagick 7 | Cover resize, tape compositing, reel atlas | `brew install imagemagick` |
 
 AI provider account (one of):
-- [OpenRouter](https://openrouter.ai) (recommended, default)
-- [Google AI](https://ai.google.dev) (Gemini)
+- Any OpenAI-compatible API (OpenRouter, SiliconFlow, etc.) — custom provider
+- [Google AI](https://ai.google.dev) (Gemini) — direct provider
 
 > `etc1tool` (Android Platform Tools) is bundled in the release packages. CLI users can download it from [Android Developer](https://developer.android.com/tools/releases/platform-tools) and place it in `platform-tools/` next to the binary.
 
@@ -108,21 +110,32 @@ Removes all skins and resets `cassette.txt` files. Use `--dry-run` to preview.
 
 ## Configuration
 
+Config file is discovered in this order:
+
+1. **`~/.coolcassette.json`** — user home directory (highest priority)
+2. **`coolcassette.json`** — next to the executable (bundled with release packages)
+
+Configuration priority: **CLI flags > environment variables > config file > defaults**
+
 ### `~/.coolcassette.json`
 
 ```json
 {
-  "api_key": "sk-or-...",
-  "provider": "openrouter"
+  "api_key": "your-api-key",
+  "provider": "custom",
+  "base_url": "https://openrouter.ai/api/v1",
+  "model": "google/gemini-3.1-flash-image-preview"
 }
 ```
 
-Configuration priority: **CLI flags > environment variables > config file > defaults**
+Configuration priority: **CLI flags > environment variables > user home config > executable directory config > defaults**
 
 | Flag | Env | Default | Description |
 |------|-----|---------|-------------|
-| `--api-key` | `OPENROUTER_API_KEY`, `API_KEY` | config file | AI provider API key |
-| `--provider` | `PROVIDER` | `openrouter` | `openrouter` or `google` |
+| `--api-key` | `CUSTOM_API_KEY`, `API_KEY` | config file | AI provider API key |
+| `--provider` | `PROVIDER` | `custom` | `custom` or `google` |
+| `--base-url` | `CUSTOM_BASE_URL` | config file | OpenAI-compatible API base URL |
+| `--model` | `CUSTOM_MODEL` | config file | Model name for image generation |
 | `--music-dir` | — | — | Music library path (repeatable) |
 | `--wampy-dir` | — | — | Wampy directory on device |
 | `--shell` | — | `random` | Shell template: `chf`, `bhf`, `random` |
