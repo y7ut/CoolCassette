@@ -370,9 +370,6 @@ directional lighting, no dark edges or gradients of any kind inside the circles.
 // generateViaGoogleGenAI uses the official Google GenAI SDK to generate a tape image.
 func generateViaGoogleGenAI(ctx context.Context, coverData, shellData []byte, prompt, apiKey string) ([]byte, error) {
 	if apiKey == "" {
-		apiKey = os.Getenv("GOOGLE_API_KEY")
-	}
-	if apiKey == "" {
 		return nil, fmt.Errorf("Google API key not set (use --api-key or GOOGLE_API_KEY env)")
 	}
 
@@ -412,24 +409,15 @@ func generateViaGoogleGenAI(ctx context.Context, coverData, shellData []byte, pr
 func generateViaCustomOpenAI(ctx context.Context, coverData, shellData []byte, prompt string, opts Options) ([]byte, error) {
 	apiKey := opts.APIKey
 	if apiKey == "" {
-		apiKey = os.Getenv("CUSTOM_API_KEY")
-	}
-	if apiKey == "" {
 		return nil, fmt.Errorf("API key not set (use --api-key or CUSTOM_API_KEY env)")
 	}
 
 	baseURL := opts.BaseURL
 	if baseURL == "" {
-		baseURL = os.Getenv("CUSTOM_BASE_URL")
-	}
-	if baseURL == "" {
 		return nil, fmt.Errorf("base URL not set (use --base-url or CUSTOM_BASE_URL env)")
 	}
 
 	model := opts.Model
-	if model == "" {
-		model = os.Getenv("CUSTOM_MODEL")
-	}
 	if model == "" {
 		return nil, fmt.Errorf("model not set (use --model or CUSTOM_MODEL env)")
 	}

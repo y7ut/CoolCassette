@@ -36,8 +36,10 @@ git clone https://github.com/coolcassette/coolcassette
 cd coolcassette && go build -o coolcassette .
 
 # 配置 API 密钥
-echo '{"api_key":"sk-or-...","provider":"openrouter"}' > ~/.coolcassette.json
-# 或: export OPENROUTER_API_KEY=sk-or-...
+echo '{"api_key":"your-key","provider":"custom","base_url":"https://openrouter.ai/api/v1","model":"google/gemini-3.1-flash-image-preview"}' > ~/.coolcassette.json
+# 或: export CUSTOM_API_KEY=your-key
+#     export CUSTOM_BASE_URL=https://openrouter.ai/api/v1
+#     export CUSTOM_MODEL=google/gemini-3.1-flash-image-preview
 
 # 预览单个专辑
 coolcassette preview ~/Music/AlbumName
@@ -55,8 +57,8 @@ coolcassette generate --music-dir ~/Music --wampy-dir /Volumes/WALKMAN/wampy
 | ImageMagick 7 | 封面缩放、磁带合成、卷轴图集 | `brew install imagemagick` |
 
 AI 服务账号（任选其一）：
-- [OpenRouter](https://openrouter.ai)（推荐，默认）
-- [Google AI](https://ai.google.dev)（Gemini）
+- 任意 OpenAI 兼容 API（OpenRouter、SiliconFlow 等）— 自定义 provider
+- [Google AI](https://ai.google.dev)（Gemini）— 直连 provider
 
 > `etc1tool`（Android Platform Tools）已包含在 Release 下载包中。CLI 用户可从 [Android Developer](https://developer.android.com/tools/releases/platform-tools) 下载，放在二进制文件旁的 `platform-tools/` 目录中即可。
 
@@ -108,21 +110,32 @@ coolcassette uninstall --music-dir ~/Music --wampy-dir /Volumes/WALKMAN/wampy --
 
 ## 配置
 
+配置文件按以下顺序查找：
+
+1. **`~/.coolcassette.json`** — 用户主目录（最高优先级）
+2. **`coolcassette.json`** — 可执行文件同目录（随发布包附带）
+
+优先级：**命令行参数 > 环境变量 > 用户主目录配置 > 可执行文件目录配置 > 默认值**
+
 ### `~/.coolcassette.json`
 
 ```json
 {
-  "api_key": "sk-or-...",
-  "provider": "openrouter"
+  "api_key": "your-api-key",
+  "provider": "custom",
+  "base_url": "https://openrouter.ai/api/v1",
+  "model": "google/gemini-3.1-flash-image-preview"
 }
 ```
 
-优先级：**命令行参数 > 环境变量 > 配置文件 > 默认值**
+优先级：**命令行参数 > 环境变量 > 用户主目录配置 > 可执行文件目录配置 > 默认值**
 
 | 参数 | 环境变量 | 默认值 | 说明 |
 |------|----------|--------|------|
-| `--api-key` | `OPENROUTER_API_KEY`, `API_KEY` | 配置文件 | AI 服务 API 密钥 |
-| `--provider` | `PROVIDER` | `openrouter` | `openrouter` 或 `google` |
+| `--api-key` | `CUSTOM_API_KEY`, `API_KEY` | 配置文件 | AI 服务 API 密钥 |
+| `--provider` | `PROVIDER` | `custom` | `custom` 或 `google` |
+| `--base-url` | `CUSTOM_BASE_URL` | 配置文件 | OpenAI 兼容 API 的 Base URL |
+| `--model` | `CUSTOM_MODEL` | 配置文件 | 图片生成模型名称 |
 | `--music-dir` | — | — | 音乐库路径（可重复） |
 | `--wampy-dir` | — | — | 设备上的 wampy 目录 |
 | `--shell` | — | `random` | 外壳模板：`chf`、`bhf`、`random` |
